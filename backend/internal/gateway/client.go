@@ -22,20 +22,11 @@ const (
 	maxMessageSize = 512 * 1024 // 512 KB
 )
 
-var allowedOrigins = map[string]bool{
-	"https://zerovc.safiroko.xyz": true,
-	"http://localhost:5173":       true,
-}
-
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		if origin == "" {
-			return true
-		}
-		return allowedOrigins[origin]
+		return middleware.IsAllowedOrigin(r.Header.Get("Origin"))
 	},
 }
 

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -54,25 +55,90 @@ func (l *LoginRateLimiter) Allow(clientIP, identifier string) (bool, int) {
 	return true, 0
 }
 
-// ExtractClientIP normalizes the client IP address, stripping ephemeral TCP ports and
-// honoring trusted reverse proxy headers.
-func ExtractClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		ip := strings.TrimSpace(parts[0])
-		if ip != "" {
-			return ip
+func cleanIP(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(s); err == nil {
+		s = host
+	}
+	s = strings.Trim(s, "[]")
+	parsed := net.ParseIP(s)
+	if parsed == nil {
+		return ""
+	}
+	return parsed.String()
+}
+
+func isTrustedProxyIP(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	if cidrs := strings.TrimSpace(os.Getenv("TRUSTED_PROXY_CIDRS")); cidrs != "" {
+		for _, entry := range strings.Split(cidrs, ",") {
+			entry = strings.TrimSpace(entry)
+			if entry == "" {
+				continue
+			}
+			if strings.Contains(entry, "/") {
+				if _, ipNet, err := net.ParseCIDR(entry); err == nil && ipNet.Contains(ip) {
+					return true
+				}
+			} else if parsed := net.ParseIP(entry); parsed != nil && parsed.Equal(ip) {
+				return true
+			}
 		}
 	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
+}
+
+// ExtractClientIP extracts the client IP address safely without trusting spoofable leftmost
+// X-Forwarded-For values: proxy headers are only honored when RemoteAddr is a trusted proxy,
+// and X-Forwarded-For is scanned right-to-left to return the rightmost untrusted IP.
+func ExtractClientIP(r *http.Request) string {
+	if r == nil {
+		return ""
 	}
 
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err == nil && host != "" {
-		return host
+	remoteIP := cleanIP(r.RemoteAddr)
+	if remoteIP == "" {
+		remoteIP = strings.TrimSpace(r.RemoteAddr)
 	}
-	return r.RemoteAddr
+
+	if !isTrustedProxyIP(remoteIP) {
+		return remoteIP
+	}
+
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		var rightmostValid string
+		for i := len(parts) - 1; i >= 0; i-- {
+			ip := cleanIP(parts[i])
+			if ip == "" {
+				continue
+			}
+			if rightmostValid == "" {
+				rightmostValid = ip
+			}
+			if !isTrustedProxyIP(ip) {
+				return ip
+			}
+		}
+		if xri := cleanIP(r.Header.Get("X-Real-IP")); xri != "" && !isTrustedProxyIP(xri) {
+			return xri
+		}
+		if rightmostValid != "" {
+			return rightmostValid
+		}
+	}
+
+	if xri := cleanIP(r.Header.Get("X-Real-IP")); xri != "" {
+		return xri
+	}
+
+	return remoteIP
 }
 
 // Middleware peeks the JSON login body up to 4KB, extracts the identifier, evaluates rate limits,

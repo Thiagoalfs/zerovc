@@ -185,9 +185,13 @@ func (h *UploadHandler) handleUpload(w http.ResponseWriter, r *http.Request, fol
 		}
 	}
 
-	// Sniff first 512 bytes for HTML/SVG disguises
+	// Sniff first 512 bytes for HTML/SVG disguises and reject empty files
 	sniffBuf := make([]byte, 512)
 	n, _ := file.Read(sniffBuf)
+	if n == 0 {
+		http.Error(w, `{"error":"O arquivo enviado está vazio."}`, http.StatusBadRequest)
+		return
+	}
 	if n > 0 {
 		detectedType := http.DetectContentType(sniffBuf[:n])
 		if strings.Contains(detectedType, "text/html") || strings.Contains(detectedType, "image/svg+xml") {

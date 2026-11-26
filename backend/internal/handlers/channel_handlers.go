@@ -741,26 +741,30 @@ func (h *ChannelHandler) JoinVoice(w http.ResponseWriter, r *http.Request) {
 		oldGuildID = &currGldID
 	}
 
+	preserveServerState := oldGuildID != nil && *oldGuildID == guildID
 	voiceSessionQuery := `
 		INSERT INTO voice_sessions (channel_id, user_id, is_muted, is_deafened, server_muted, server_deafened, is_screensharing)
 		VALUES ($1, $2, $3, $4, false, false, false)
 		ON CONFLICT (user_id) DO UPDATE
 		SET channel_id = EXCLUDED.channel_id,
-		    is_muted = EXCLUDED.is_muted,
-		    is_deafened = EXCLUDED.is_deafened,
-		    server_muted = false,
-		    server_deafened = false,
+		    is_muted = CASE WHEN $5 AND COALESCE(voice_sessions.server_muted, false) THEN true ELSE EXCLUDED.is_muted END,
+		    is_deafened = CASE WHEN $5 AND COALESCE(voice_sessions.server_deafened, false) THEN true ELSE EXCLUDED.is_deafened END,
+		    server_muted = CASE WHEN $5 THEN COALESCE(voice_sessions.server_muted, false) ELSE false END,
+		    server_deafened = CASE WHEN $5 THEN COALESCE(voice_sessions.server_deafened, false) ELSE false END,
 		    is_screensharing = false,
 		    joined_at = CURRENT_TIMESTAMP
 		RETURNING id, channel_id, user_id, is_muted, is_deafened, COALESCE(server_muted, false), COALESCE(server_deafened, false), is_screensharing, joined_at
 	`
 	var session models.VoiceSession
-	err = h.db.Pool.QueryRow(r.Context(), voiceSessionQuery, channelID, userID, isMuted, isDeafened).Scan(
+	err = h.db.Pool.QueryRow(r.Context(), voiceSessionQuery, channelID, userID, isMuted, isDeafened, preserveServerState).Scan(
 		&session.ID, &session.ChannelID, &session.UserID, &session.IsMuted, &session.IsDeafened, &session.ServerMuted, &session.ServerDeafened, &session.IsScreensharing, &session.JoinedAt,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"failed to save voice session"}`, http.StatusInternalServerError)
 		return
+	}
+	if session.ServerMuted {
+		canSpeak = false
 	}
 	session.User = user.ToPublic()
 
@@ -874,7 +878,21 @@ func (h *ChannelHandler) UpdateVoiceState(w http.ResponseWriter, r *http.Request
 	var guildID uuid.UUID
 	h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
 
+	var serverMuted, serverDeafened bool
+	if err := h.db.Pool.QueryRow(r.Context(), `
+		SELECT COALESCE(server_muted, false), COALESCE(server_deafened, false)
+		FROM voice_sessions WHERE user_id = $1 AND channel_id = $2
+	`, userID, channelID).Scan(&serverMuted, &serverDeafened); err != nil {
+		http.Error(w, `{"error":"session not found"}`, http.StatusNotFound)
+		return
+	}
+
 	if req.IsMuted != nil && !*req.IsMuted {
+		if serverMuted {
+			http.Error(w, `{"error":"forbidden: você foi silenciado pelo servidor"}`, http.StatusForbidden)
+			return
+		}
+
 		var mutedUntil *time.Time
 		_ = h.db.Pool.QueryRow(r.Context(), "SELECT muted_until FROM guild_members WHERE guild_id = $1 AND user_id = $2", guildID, userID).Scan(&mutedUntil)
 		if mutedUntil != nil && mutedUntil.After(time.Now().UTC()) {
@@ -887,6 +905,11 @@ func (h *ChannelHandler) UpdateVoiceState(w http.ResponseWriter, r *http.Request
 			http.Error(w, `{"error":"forbidden: você não tem permissão para falar neste canal de voz"}`, http.StatusForbidden)
 			return
 		}
+	}
+
+	if req.IsDeafened != nil && !*req.IsDeafened && serverDeafened {
+		http.Error(w, `{"error":"forbidden: você foi ensurdecido pelo servidor"}`, http.StatusForbidden)
+		return
 	}
 
 	if req.IsScreensharing != nil && *req.IsScreensharing {

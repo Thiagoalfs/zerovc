@@ -1,7 +1,7 @@
 import { Channel, Guild, Message, User, Friendship, GuildInvite, DMRoom, DMMessage, Role, DMGroup, DMGroupMessage, FavoriteGIF, AuditLog, ChannelReadState, GuildEmoji, ChannelPermissionOverwrite, LinkMetadata, CustomActivity, ServerFolder, UserSession, VoiceSession, GameSearchResult } from '../types';
 import { convertToWebP } from '../utils/image';
 import { optimizeImageForUpload } from './imageOptimizer';
-import { isElectron, isTauri, getDesktopAPI } from './platform';
+import { isTauri, getDesktopAPI } from './platform';
 import { updateServerTime } from '../utils/timeSync';
 
 const getStorageItem = (key: string): string | null => {
@@ -18,11 +18,6 @@ const setStorageItem = (key: string, value: string): void => {
   try {
     localStorage.setItem(key, value);
   } catch {}
-};
-
-const getLegacyElectronToken = (): string | null => {
-  if (isTauri()) return null;
-  return getStorageItem('token') || getStorageItem('zerovc_token');
 };
 
 let cachedApiUrl: string | null = null;
@@ -98,6 +93,15 @@ export const setCsrfToken = (token: string): void => {
   setStorageItem('zerovc_csrf_token', token);
 };
 
+export const clearCsrfToken = (): void => {
+  memoryCsrfToken = null;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.removeItem('zerovc_csrf_token');
+    } catch {}
+  }
+};
+
 export const getCsrfToken = (): string => {
   if (memoryCsrfToken) return memoryCsrfToken;
   const stored = getStorageItem('zerovc_csrf_token');
@@ -160,10 +164,6 @@ export function postKeepalive(endpoint: string): void {
     const headers: Record<string, string> = {};
     const csrf = getCsrfToken();
     if (csrf) headers['X-CSRF-Token'] = csrf;
-    if (isElectron()) {
-      const token = getLegacyElectronToken();
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-    }
     void fetch(`${getApiBaseUrl()}/api${endpoint}`, {
       method: 'POST',
       credentials: 'include',
@@ -312,8 +312,8 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    login: (data: { email: string; password: string; code?: string; turnstile_token?: string }) =>
-      request<{ token?: string; csrf_token?: string; requires_2fa?: boolean; requires_verification?: boolean; email?: string; user?: User }>('/auth/login', {
+    login: (data: { email: string; password: string; code?: string; turnstile_token?: string; twofa_challenge?: string }) =>
+      request<{ token?: string; csrf_token?: string; requires_2fa?: boolean; twofa_challenge?: string; requires_verification?: boolean; email?: string; user?: User }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
@@ -337,7 +337,7 @@ export const api = {
       request<{ secret: string; otpauth_uri: string }>('/auth/2fa/generate', {
         method: 'POST',
       }),
-    enable2FA: (data: { secret: string; code: string }) =>
+    enable2FA: (data: { secret: string; code: string; password: string }) =>
       request<{ success: boolean; two_factor_enabled: boolean; backup_codes?: string[] }>('/auth/2fa/enable', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -835,8 +835,6 @@ export const api = {
       const formData = new FormData();
       formData.append('file', optimizedFile);
       const headers: Record<string, string> = {};
-      const token = getLegacyElectronToken();
-      if (token) headers['Authorization'] = `Bearer ${token}`;
       const csrf = getCsrfToken();
       if (csrf) headers['X-CSRF-Token'] = csrf;
       const res = await fetch(`${getApiBaseUrl()}/api/upload/avatar`, {
@@ -860,8 +858,6 @@ export const api = {
       const formData = new FormData();
       formData.append('file', optimizedFile);
       const headers: Record<string, string> = {};
-      const token = getLegacyElectronToken();
-      if (token) headers['Authorization'] = `Bearer ${token}`;
       const csrf = getCsrfToken();
       if (csrf) headers['X-CSRF-Token'] = csrf;
       const res = await fetch(`${getApiBaseUrl()}/api/upload/guild-icon`, {
@@ -885,8 +881,6 @@ export const api = {
       const formData = new FormData();
       formData.append('file', optimizedFile);
       const headers: Record<string, string> = {};
-      const token = getLegacyElectronToken();
-      if (token) headers['Authorization'] = `Bearer ${token}`;
       const csrf = getCsrfToken();
       if (csrf) headers['X-CSRF-Token'] = csrf;
       const res = await fetch(`${getApiBaseUrl()}/api/upload/guild-icon`, {
@@ -910,8 +904,6 @@ export const api = {
       const formData = new FormData();
       formData.append('file', optimizedFile);
       const headers: Record<string, string> = {};
-      const token = getLegacyElectronToken();
-      if (token) headers['Authorization'] = `Bearer ${token}`;
       const csrf = getCsrfToken();
       if (csrf) headers['X-CSRF-Token'] = csrf;
       const res = await fetch(`${getApiBaseUrl()}/api/upload/guild-banner`, {
@@ -935,8 +927,6 @@ export const api = {
       const formData = new FormData();
       formData.append('file', optimizedFile);
       const headers: Record<string, string> = {};
-      const token = getLegacyElectronToken();
-      if (token) headers['Authorization'] = `Bearer ${token}`;
       const csrf = getCsrfToken();
       if (csrf) headers['X-CSRF-Token'] = csrf;
       const res = await fetch(`${getApiBaseUrl()}/api/upload/banner`, {
@@ -966,7 +956,6 @@ export const api = {
       const optimizedFile = await convertToWebP(file);
       const formData = new FormData();
       formData.append('file', optimizedFile);
-      const token = getLegacyElectronToken();
       const csrf = getCsrfToken();
       const params = new URLSearchParams();
       if (options?.temp) params.append('temp', 'true');
@@ -978,7 +967,6 @@ export const api = {
         xhr.open('POST', uploadUrl, true);
         xhr.withCredentials = true;
 
-        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         if (csrf) xhr.setRequestHeader('X-CSRF-Token', csrf);
 
         if (options?.signal) {
@@ -1110,7 +1098,7 @@ export const api = {
       }),
 
     claimOTKs: (deviceIds: string[]) =>
-      request<Record<string, { key_id: string; public_key: string }>>('/e2ee/devices/keys/claim', {
+      request<{ claimed_keys: Record<string, { key_id: string; public_key: string; is_fallback?: boolean }> } | Record<string, { key_id: string; public_key: string }>>('/e2ee/devices/keys/claim', {
         method: 'POST',
         body: JSON.stringify({ device_ids: deviceIds }),
       }),
@@ -1195,18 +1183,22 @@ export const api = {
     uploadAttachment: async (
       blob: Blob | ArrayBuffer,
       filename = 'encrypted.bin',
-      onProgress?: (percent: number) => void
+      onProgress?: (percent: number) => void,
+      conversation?: { type: 'channel' | 'dm' | 'dm_group'; id: string }
     ): Promise<{ id: string; url: string; size: number }> => {
       const baseUrl = getApiBaseUrl();
-      const token = getLegacyElectronToken();
       const body = blob instanceof Blob ? blob : new Blob([blob], { type: 'application/octet-stream' });
 
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', `${baseUrl}/api/e2ee/attachments`);
-        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.withCredentials = true;
         xhr.setRequestHeader('Content-Type', 'application/octet-stream');
         xhr.setRequestHeader('X-Client-E2EE-Version', '1');
+        if (conversation?.type && conversation?.id) {
+          xhr.setRequestHeader('X-Conversation-Type', conversation.type);
+          xhr.setRequestHeader('X-Conversation-ID', conversation.id);
+        }
         const csrfToken = getCsrfToken();
         if (csrfToken) xhr.setRequestHeader('X-CSRF-Token', csrfToken);
 

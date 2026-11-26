@@ -192,26 +192,10 @@ func (h *GuildHandler) List(w http.ResponseWriter, r *http.Request) {
 		chanQuery := `
 			SELECT c.id, c.guild_id, c.name, c.type, c.position, c.is_private, c.category_id, c.topic, COALESCE(c.slowmode_seconds, 0), c.created_at
 			FROM channels c
-			INNER JOIN guilds g ON g.id = c.guild_id
 			WHERE c.guild_id = ANY($1)
-			  AND (
-				NOT c.is_private
-				OR g.owner_id = $2
-				OR EXISTS (
-					SELECT 1 FROM guild_roles gr
-					INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
-					WHERE gmr.guild_id = c.guild_id AND gmr.user_id = $2
-					  AND (gr.permissions & $3) != 0
-				)
-				OR EXISTS (
-					SELECT 1 FROM channel_role_access cra
-					INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
-					WHERE cra.channel_id = c.id AND gmr.guild_id = c.guild_id AND gmr.user_id = $2
-				)
-			  )
 			ORDER BY c.position ASC, c.created_at ASC
 		`
-		chanRows, err := h.db.Pool.Query(r.Context(), chanQuery, guildIDs, userID, models.PermAdministrator)
+		chanRows, err := h.db.Pool.Query(r.Context(), chanQuery, guildIDs)
 		if err == nil {
 			defer chanRows.Close()
 			for chanRows.Next() {
@@ -219,6 +203,9 @@ func (h *GuildHandler) List(w http.ResponseWriter, r *http.Request) {
 				if err := chanRows.Scan(
 					&ch.ID, &ch.GuildID, &ch.Name, &ch.Type, &ch.Position, &ch.IsPrivate, &ch.CategoryID, &ch.Topic, &ch.SlowmodeSeconds, &ch.CreatedAt,
 				); err == nil {
+					if canAccess, accessErr := canUserAccessChannel(r.Context(), h.db, ch.GuildID, ch.ID, userID); accessErr != nil || !canAccess {
+						continue
+					}
 					if idx, ok := guildIndexMap[ch.GuildID]; ok {
 						guilds[idx].Channels = append(guilds[idx].Channels, ch)
 					}
@@ -392,7 +379,30 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		vRows.Close()
 	}
 
-	// 5.1 Get Channels with in-memory metadata attachment
+	// 5.1 Get Channels with in-memory metadata attachment & full PermViewChannel/overwrite check
+	var everyoneRoleID uuid.UUID
+	var basePerms int64
+	userRoleIDs := make([]uuid.UUID, 0, len(userRoleMap))
+	for _, role := range guild.Roles {
+		if role.Name == "@everyone" {
+			everyoneRoleID = role.ID
+			basePerms |= role.Permissions
+		} else if userRoleMap[role.ID] {
+			basePerms |= role.Permissions
+			userRoleIDs = append(userRoleIDs, role.ID)
+		}
+	}
+	toOverwriteMap := func(list []models.ChannelPermissionOverwrite) map[uuid.UUID]roleOverwrite {
+		if len(list) == 0 {
+			return nil
+		}
+		m := make(map[uuid.UUID]roleOverwrite, len(list))
+		for _, ow := range list {
+			m[ow.RoleID] = roleOverwrite{Allow: ow.Allow, Deny: ow.Deny}
+		}
+		return m
+	}
+
 	chanQuery := `SELECT id, guild_id, name, type, category_id, topic, position, is_private, COALESCE(slowmode_seconds, 0), created_at FROM channels WHERE guild_id = $1 ORDER BY position ASC, name ASC`
 	cRows, err := h.db.Pool.Query(r.Context(), chanQuery, guildID)
 	if err == nil {
@@ -400,18 +410,28 @@ func (h *GuildHandler) GetDetails(w http.ResponseWriter, r *http.Request) {
 		for cRows.Next() {
 			var ch models.Channel
 			if err := cRows.Scan(&ch.ID, &ch.GuildID, &ch.Name, &ch.Type, &ch.CategoryID, &ch.Topic, &ch.Position, &ch.IsPrivate, &ch.SlowmodeSeconds, &ch.CreatedAt); err == nil {
-				// If private, load allowed role IDs and check access
 				if ch.IsPrivate {
-					allowedRoles := roleAccessMap[ch.ID]
-					ch.RoleIDs = allowedRoles
-					hasChannelAccess := hasAdminPerm
-					if !hasAdminPerm {
-						for _, allowedRoleID := range allowedRoles {
+					ch.RoleIDs = roleAccessMap[ch.ID]
+				}
+				if !hasAdminPerm {
+					var hasChannelAccess bool
+					if ch.IsPrivate {
+						for _, allowedRoleID := range ch.RoleIDs {
 							if userRoleMap[allowedRoleID] {
 								hasChannelAccess = true
 								break
 							}
 						}
+					} else {
+						hasChannelAccess = (basePerms & models.PermViewChannel) != 0
+					}
+					if ch.CategoryID != nil {
+						if catOW := toOverwriteMap(overwritesMap[*ch.CategoryID]); catOW != nil {
+							hasChannelAccess = evalRoleOverwrites(catOW, everyoneRoleID, userRoleIDs, models.PermViewChannel, hasChannelAccess)
+						}
+					}
+					if chOW := toOverwriteMap(overwritesMap[ch.ID]); chOW != nil {
+						hasChannelAccess = evalRoleOverwrites(chOW, everyoneRoleID, userRoleIDs, models.PermViewChannel, hasChannelAccess)
 					}
 					if !hasChannelAccess {
 						continue

@@ -1,12 +1,17 @@
 package handlers
 
 import (
+	"bytes"
+	"context"
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/zerovc/zerovc/backend/internal/auth"
 	"github.com/zerovc/zerovc/backend/internal/middleware"
 )
 
@@ -123,5 +128,66 @@ func TestResolveAbsoluteURL_SanitizesSchemes(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("resolveAbsoluteURL(%q) = %q, want %q", tc.target, got, tc.want)
 		}
+	}
+}
+
+func TestIsAllowedOrigin_ProductionAndTauri(t *testing.T) {
+	t.Setenv("APP_URL", "")
+	t.Setenv("APP_ENV", "production")
+
+	if middleware.IsAllowedOrigin("http://localhost:5173") {
+		t.Fatal("expected http://localhost:5173 to be rejected when APP_ENV=production")
+	}
+	for _, orig := range []string{
+		"https://zerovc.safiroko.xyz",
+		"http://tauri.localhost",
+		"https://tauri.localhost",
+		"tauri://localhost",
+	} {
+		if !middleware.IsAllowedOrigin(orig) {
+			t.Fatalf("expected origin %q to be allowed in production", orig)
+		}
+	}
+
+	t.Setenv("APP_ENV", "development")
+	if !middleware.IsAllowedOrigin("http://localhost:5173") {
+		t.Fatal("expected http://localhost:5173 to be allowed outside production")
+	}
+}
+
+func TestE2EE_BatchCapsAndUploadConversationValidation(t *testing.T) {
+	h := &E2EEHandler{}
+	ctx := auth.SetUserIDInContext(context.Background(), uuid.New())
+
+	// ClaimKeys > 100 devices rejected with 400
+	ids := make([]string, 101)
+	for i := range ids {
+		ids[i] = `"` + uuid.New().String() + `"`
+	}
+	claimReq := httptest.NewRequest(http.MethodPost, "/api/e2ee/devices/keys/claim",
+		strings.NewReader(`{"device_ids":[`+strings.Join(ids, ",")+`]}`)).WithContext(ctx)
+	claimRec := httptest.NewRecorder()
+	h.ClaimKeys(claimRec, claimReq)
+	if claimRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for >100 device_ids, got %d", claimRec.Code)
+	}
+
+	// SendToDevice > 64KB payload rejected with 400
+	bigPayload := strings.Repeat("a", 65*1024)
+	toDevBody := `{"messages":[{"recipient_device_id":"` + uuid.New().String() + `","msg_type":"room_key","payload":"` + bigPayload + `"}]}`
+	toDevReq := httptest.NewRequest(http.MethodPost, "/api/e2ee/to-device", strings.NewReader(toDevBody)).WithContext(ctx)
+	toDevRec := httptest.NewRecorder()
+	h.SendToDevice(toDevRec, toDevReq)
+	if toDevRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for >64KB to-device payload, got %d", toDevRec.Code)
+	}
+
+	// UploadAttachment invalid conversation_type rejected with 400
+	upReq := httptest.NewRequest(http.MethodPost, "/api/e2ee/attachments?conversation_type=invalid&conversation_id="+uuid.New().String(),
+		bytes.NewReader([]byte("cipher"))).WithContext(ctx)
+	upRec := httptest.NewRecorder()
+	h.UploadAttachment(upRec, upReq)
+	if upRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid conversation_type, got %d", upRec.Code)
 	}
 }

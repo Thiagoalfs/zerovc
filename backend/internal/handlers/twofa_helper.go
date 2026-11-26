@@ -42,13 +42,14 @@ func verifyUser2FA(ctx context.Context, db *database.DB, userID uuid.UUID, rawCo
 	backupHash := auth.HashBackupCode(cleanCode)
 	var backupID uuid.UUID
 	err := db.Pool.QueryRow(ctx, `
-		SELECT id FROM user_2fa_backup_codes
+		UPDATE user_2fa_backup_codes
+		SET used_at = CURRENT_TIMESTAMP
 		WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+		RETURNING id
 	`, userID, backupHash).Scan(&backupID)
 	if err != nil {
 		return &twoFAError{Status: http.StatusUnauthorized, Payload: `{"error":"código 2FA ou backup incorreto"}`}
 	}
 
-	_, _ = db.Pool.Exec(ctx, `UPDATE user_2fa_backup_codes SET used_at = CURRENT_TIMESTAMP WHERE id = $1`, backupID)
 	return nil
 }

@@ -24,12 +24,13 @@ func NewLiveKitService(apiKey, apiSecret, publicURL string) *LiveKitService {
 
 func (s *LiveKitService) GenerateJoinToken(roomName string, userID uuid.UUID, username string, metadata string, canPublish bool) (string, error) {
 	at := auth.NewAccessToken(s.apiKey, s.apiSecret)
+	canSubscribe := true
 	grant := &auth.VideoGrant{
 		RoomJoin:       true,
 		Room:           roomName,
 		CanPublish:     &canPublish,
-		CanSubscribe:   &canPublish, // can receive other streams
-		CanPublishData: &canPublish, // for chat / data channel
+		CanSubscribe:   &canSubscribe, // always allow receiving other streams
+		CanPublishData: &canPublish,   // for chat / data channel
 	}
 
 	at.AddGrant(grant).

@@ -273,6 +273,7 @@ func main() {
 	klipyAPIKey := getEnv("KLIPY_API_KEY", getEnv("VITE_KLIPY_API_KEY", ""))
 	gifHandler := handlers.NewGIFHandler(klipyAPIKey)
 	e2eeHandler := handlers.NewE2EEHandler(db, hub)
+	e2eeHandler.SetUploadDir(uploadDir)
 	channelHandler.SetAudienceDebouncer(e2eeHandler.Debouncer)
 	guildHandler.SetAudienceDebouncer(e2eeHandler.Debouncer)
 	roleHandler.SetAudienceDebouncer(e2eeHandler.Debouncer)
@@ -282,11 +283,28 @@ func main() {
 
 	// Global middlewares
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if ip := ratelimit.ExtractClientIP(r); ip != "" {
+				r.RemoteAddr = ip
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
 	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch || r.Method == http.MethodDelete {
+				if !strings.HasPrefix(r.URL.Path, "/api/upload/") && r.URL.Path != "/api/e2ee/attachments" {
+					r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -302,20 +320,9 @@ func main() {
 	})
 
 	// CORS Configuration
-	allowedOrigins := map[string]bool{
-		"https://zerovc.safiroko.xyz": true,
-		"http://localhost:5173":       true,
-		"http://tauri.localhost":      true,
-		"https://tauri.localhost":     true,
-		"tauri://localhost":           true,
-	}
-
 	r.Use(cors.Handler(cors.Options{
 		AllowOriginFunc: func(r *http.Request, origin string) bool {
-			if origin == "" {
-				return true
-			}
-			return allowedOrigins[origin]
+			return appMiddleware.IsAllowedOrigin(origin)
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Bot-ID", "X-Client-E2EE-Version"},
@@ -324,6 +331,16 @@ func main() {
 		MaxAge:           300,
 	}))
 
+	limitByClientIP := func(requestLimit int, windowLength time.Duration) func(http.Handler) http.Handler {
+		return httprate.Limit(
+			requestLimit,
+			windowLength,
+			httprate.WithKeyFuncs(func(r *http.Request) (string, error) {
+				return ratelimit.ExtractClientIP(r), nil
+			}),
+		)
+	}
+
 	// Public Auth Endpoints - rate limit só aqui dentro
 	loginLimiter := ratelimit.NewLoginRateLimiter(
 		5, 5.0/60.0,   // 5 req/min per IP:username
@@ -331,7 +348,7 @@ func main() {
 		"Muitas tentativas de login. Aguarde um instante antes de tentar novamente.",
 	)
 	r.Route("/api/auth", func(r chi.Router) {
-		r.Use(httprate.LimitByIP(10, time.Minute))
+		r.Use(limitByClientIP(10, time.Minute))
 		r.Post("/register", authHandler.Register)
 		r.Post("/verify-email", authHandler.VerifyEmail)
 		r.Post("/resend-verification", authHandler.ResendVerification)
@@ -376,10 +393,10 @@ func main() {
 	})
 
 	// Public Invite Preview (Rate limit: 30 req/min por IP)
-	r.With(httprate.LimitByIP(30, time.Minute)).Get("/api/invites/{code}", inviteHandler.GetInvite)
+	r.With(limitByClientIP(30, time.Minute)).Get("/api/invites/{code}", inviteHandler.GetInvite)
 
 	// Public Link OpenGraph Metadata Preview (Rate limit: 20 req/min por IP + SSRF Protection)
-	r.With(httprate.LimitByIP(20, time.Minute)).Get("/api/link-preview", linkPreviewHandler.GetMetadata)
+	r.With(limitByClientIP(20, time.Minute)).Get("/api/link-preview", linkPreviewHandler.GetMetadata)
 
 	// Public E2EE Protocol Discovery & Capability Config
 	r.Get("/api/e2ee/config", e2eeHandler.GetConfig)
@@ -387,7 +404,7 @@ func main() {
 	// Public Turnstile Config & Embedded Widget (for Desktop Tauri WebView)
 	r.Get("/api/auth/turnstile-config", authHandler.GetTurnstileConfig)
 	r.Get("/api/auth/turnstile-widget", authHandler.GetTurnstileWidget)
-	r.With(httprate.LimitByIP(10, time.Minute)).Post("/api/auth/desktop-exchange", authHandler.ExchangeDesktopAuthCode)
+	r.With(limitByClientIP(10, time.Minute)).Post("/api/auth/desktop-exchange", authHandler.ExchangeDesktopAuthCode)
 
 	// Protected API Routes
 	r.Group(func(r chi.Router) {
@@ -418,7 +435,7 @@ func main() {
 
 		// Current User & Profile Customization
 		r.Get("/api/auth/me", authHandler.Me)
-		r.Post("/api/auth/desktop-code", authHandler.CreateDesktopAuthCode)
+		r.With(sensitiveActionLimiter.Middleware).Post("/api/auth/desktop-code", authHandler.CreateDesktopAuthCode)
 		r.Get("/api/auth/sessions", authHandler.GetSessions)
 		r.With(sensitiveActionLimiter.Middleware).Post("/api/auth/sessions/{id}/revoke", authHandler.RevokeSession)
 		r.With(sensitiveActionLimiter.Middleware).Post("/api/auth/sessions/revoke-others", authHandler.RevokeOtherSessions)
@@ -508,17 +525,14 @@ func main() {
 		r.Post("/api/dms/{roomID}/close", dmHandler.CloseRoom)
 		r.Post("/api/dms/{roomID}/e2ee/enable", dmHandler.EnableE2EE)
 		r.Post("/api/dm/rooms/{roomID}/e2ee/enable", dmHandler.EnableE2EE)
-		r.Post("/api/dms/{id}/e2ee/enable", dmHandler.EnableE2EE)
-		r.Post("/api/dm/rooms/{id}/e2ee/enable", dmHandler.EnableE2EE)
 		r.Get("/api/dms/{roomID}/messages", dmHandler.ListMessages)
 		r.Get("/api/dms/{roomID}/pins", dmHandler.ListPinned)
+		r.Get("/api/dm/rooms/{roomID}/pins", dmHandler.ListPinned)
 		r.With(messageLimiter.Middleware).Post("/api/dms/{roomID}/messages", dmHandler.SendMessage)
 		r.With(messageMutationLimiter.Middleware).Patch("/api/dms/{roomID}/messages/{messageID}", dmHandler.UpdateMessage)
 		r.With(messageMutationLimiter.Middleware).Delete("/api/dms/{roomID}/messages/{messageID}", dmHandler.DeleteMessage)
 		r.With(reactionLimiter.Middleware).Post("/api/dms/{roomID}/messages/{messageID}/reactions", dmHandler.AddReaction)
 		r.With(reactionLimiter.Middleware).Delete("/api/dms/{roomID}/messages/{messageID}/reactions/{emoji}", dmHandler.RemoveReaction)
-		r.Get("/api/dms/{roomID}/pins", dmHandler.ListPinned)
-		r.Get("/api/dm/rooms/{roomID}/pins", dmHandler.ListPinned)
 		r.With(pinLimiter.Middleware).Post("/api/dms/{roomID}/messages/{messageID}/pin", dmHandler.TogglePin)
 		r.With(callInviteLimiter.Middleware).Post("/api/dms/{roomID}/call/invite", dmHandler.InviteCall)
 		r.With(callInviteLimiter.Middleware).Post("/api/dm/rooms/{roomID}/call/invite", dmHandler.InviteCall)
@@ -575,6 +589,7 @@ func main() {
 		r.With(uploadLimiter.Middleware).Post("/api/upload/attachment", uploadHandler.UploadAttachment)
 
 		// E2EE Identity, Devices, Rosters, Backups & Queues (Strict POST + CSRF + E2EE Version gating)
+		e2eeBurstLimiter := ratelimit.NewUserRateLimiter(30, 30.0/60.0, "Você está realizando muitas operações E2EE. Aguarde um instante.")
 		r.Group(func(r chi.Router) {
 			r.Use(appMiddleware.RequireE2EEClientVersion(appMiddleware.GetMinE2EEClientVersion()))
 
@@ -585,10 +600,10 @@ func main() {
 			r.Get("/api/e2ee/users/{user_id}/devices", e2eeHandler.ListUserDevices)
 			r.Post("/api/e2ee/devices/{device_id}/revoke", e2eeHandler.RevokeDevice)
 			r.Post("/api/e2ee/devices/{device_id}/keys", e2eeHandler.ReplenishOTKs)
-			r.Post("/api/e2ee/devices/keys/claim", e2eeHandler.ClaimKeys)
+			r.With(e2eeBurstLimiter.Middleware).Post("/api/e2ee/devices/keys/claim", e2eeHandler.ClaimKeys)
 
 			// E2EE To-Device Queue & Real-Time Delivery
-			r.Post("/api/e2ee/to-device", e2eeHandler.SendToDevice)
+			r.With(e2eeBurstLimiter.Middleware).Post("/api/e2ee/to-device", e2eeHandler.SendToDevice)
 			r.Get("/api/e2ee/to-device", e2eeHandler.GetPendingToDevice)
 			r.Post("/api/e2ee/to-device/ack", e2eeHandler.AckToDevice)
 

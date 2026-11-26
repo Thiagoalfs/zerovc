@@ -72,6 +72,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
 
   // Turnstile state (lê via API /api/auth/turnstile-config com fallback para VITE_TURNSTILE_SITE_KEY)
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState<string | null>(null);
   const turnstileRef = useRef<TurnstileWidgetRef>(null);
   const [turnstileConfig, setTurnstileConfig] = useState<{ enabled: boolean; site_key?: string } | null>(null);
 
@@ -298,13 +299,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ initialMode = 'login', o
     if (mode === 'login') {
       try {
         const codeToSend = twoFactorCode.trim() || undefined;
-        const res = await login(email.trim().toLowerCase(), password, codeToSend, turnstileToken || undefined);
+        const res = await login(
+          email.trim().toLowerCase(),
+          password,
+          codeToSend,
+          turnstileToken || undefined,
+          twoFactorChallenge || undefined
+        );
         if (res?.requires_2fa) {
           setRequires2FA(true);
+          if (res.twofa_challenge) setTwoFactorChallenge(res.twofa_challenge);
         } else if (res?.requires_verification) {
           if (res.email) setEmail(res.email);
           setMode('verify_email');
         } else {
+          setTwoFactorChallenge(null);
           try { localStorage.removeItem(AUTH_DRAFT_KEY); } catch {}
         }
       } catch {

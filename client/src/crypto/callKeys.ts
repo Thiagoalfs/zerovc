@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ZeroVC Opt-in E2EE - LiveKit Call Key State Machine & Manager
  *
  * Implements Milestone M4 (Requirement R4, Spec §13):
@@ -15,6 +15,8 @@ import { api } from '../lib/api';
 import { safeCryptoLogger } from './safeLogger';
 import { livekitE2EEManager } from '../lib/livekitE2EE';
 import { uint8ArrayToBase64, base64ToUint8Array } from './attachments';
+import { olmSessionManager } from './olmSession';
+import { rosterManager } from './rosterManager';
 
 export type CallKeyState =
   | 'NO_KEY'
@@ -43,6 +45,7 @@ export interface CallKeyManagerOptions {
     msg_type: string;
     payload: string;
   }>) => Promise<any>;
+  encryptPayloadFn?: (deviceId: string, payload: CallKeyToDevicePayload) => Promise<string>;
   setKeyFn?: (key: ArrayBuffer) => Promise<void>;
 }
 
@@ -82,6 +85,7 @@ export class CallKeyManager {
   private myDeviceId: string | null = null;
   private distributorDeviceId: string | null = null;
   private connectedDevices: Set<string> = new Set();
+  private deviceUserMap: Map<string, string> = new Map();
   private currentKey: Uint8Array | null = null;
   private keyIndex: number = 0;
   private epoch: number = 0;
@@ -92,6 +96,7 @@ export class CallKeyManager {
   private onStateChange?: (state: CallKeyState) => void;
   private onKeyRotated?: (keyIndex: number, epoch: number) => void;
   private customSendToDevice?: (messages: any[]) => Promise<any>;
+  private customEncryptPayload?: (deviceId: string, payload: CallKeyToDevicePayload) => Promise<string>;
   private customSetKey?: (key: ArrayBuffer) => Promise<void>;
 
   constructor(options?: CallKeyManagerOptions) {
@@ -107,7 +112,14 @@ export class CallKeyManager {
       this.debounceMs = Math.max(10, options.debounceMs);
     }
     if (options.sendToDeviceFn) this.customSendToDevice = options.sendToDeviceFn;
+    if (options.encryptPayloadFn) this.customEncryptPayload = options.encryptPayloadFn;
     if (options.setKeyFn) this.customSetKey = options.setKeyFn;
+  }
+
+  registerDeviceUser(deviceId: string, userId: string): void {
+    if (deviceId && userId) {
+      this.deviceUserMap.set(deviceId, userId);
+    }
   }
 
   getState(): CallKeyState {
@@ -336,12 +348,50 @@ export class CallKeyManager {
       sender_device_id: this.myDeviceId,
     };
 
-    const messages = recipients.map((devId) => ({
-      recipient_device_id: devId,
-      sender_device_id: this.myDeviceId!,
-      msg_type: 'call_key',
-      payload: JSON.stringify(payload),
-    }));
+    const messages: Array<{
+      recipient_device_id: string;
+      sender_device_id: string;
+      msg_type: string;
+      payload: string;
+    }> = [];
+
+    if (this.customSendToDevice) {
+      for (const devId of recipients) {
+        const serialized = this.customEncryptPayload
+          ? await this.customEncryptPayload(devId, payload)
+          : JSON.stringify(payload);
+        messages.push({
+          recipient_device_id: devId,
+          sender_device_id: this.myDeviceId,
+          msg_type: 'call_key',
+          payload: serialized,
+        });
+      }
+    } else {
+      const activeRoster = rosterManager.getActiveRoster(this.callId);
+      for (const devId of recipients) {
+        try {
+          const rosterEntry = activeRoster?.devices?.find((d) => d.device_id === devId);
+          const userId = this.deviceUserMap.get(devId) || rosterEntry?.user_id;
+          const encrypted = await olmSessionManager.encryptPayloadForDevice(
+            devId,
+            payload,
+            rosterEntry?.curve25519_key,
+            userId
+          );
+          messages.push({
+            recipient_device_id: devId,
+            sender_device_id: this.myDeviceId,
+            msg_type: 'call_key',
+            payload: JSON.stringify(encrypted),
+          });
+        } catch (err: any) {
+          safeCryptoLogger.warn('CallKeyManager', `Skipping call_key for device ${devId} without Olm session/OTK: ${err?.message || err}`);
+        }
+      }
+    }
+
+    if (messages.length === 0) return;
 
     try {
       if (this.customSendToDevice) {
@@ -349,7 +399,7 @@ export class CallKeyManager {
       } else {
         await api.e2ee.sendToDevice(messages);
       }
-      safeCryptoLogger.info('CallKeyManager', `Dispatched call_key to ${recipients.length} device(s)`);
+      safeCryptoLogger.info('CallKeyManager', `Dispatched call_key to ${messages.length} device(s)`);
     } catch (err) {
       safeCryptoLogger.warn('CallKeyManager', 'Failed to dispatch call key via to-device:', err);
     }
@@ -508,6 +558,7 @@ export class CallKeyManager {
     this.myDeviceId = null;
     this.distributorDeviceId = null;
     this.connectedDevices.clear();
+    this.deviceUserMap.clear();
     this.keyIndex = 0;
     this.epoch = 0;
 

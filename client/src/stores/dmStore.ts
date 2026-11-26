@@ -11,6 +11,9 @@ import { messageCodec } from '../messaging/messageCodec';
 import { keyRequestManager } from '../crypto/keyRequestManager';
 import { deviceManager } from '../crypto/deviceManager';
 import { resolveFirstUnreadMessageId } from '../utils/unread';
+import { setCachedMessagesLRU, touchLruKey } from '../utils/lruMessageCache';
+
+const roomLruOrder: string[] = [];
 
 interface DMState {
   rooms: DMRoom[];
@@ -88,6 +91,9 @@ export const useDMStore = create<DMState>((set, get) => ({
     } catch {}
 
     const cachedMessages = get().messagesByRoom[room.id];
+    if (cachedMessages) {
+      touchLruKey(roomLruOrder, room.id);
+    }
     const hasFetched = Boolean(get().fetchedRooms[room.id]);
 
     set((state) => {
@@ -117,7 +123,7 @@ export const useDMStore = create<DMState>((set, get) => ({
       };
     });
 
-    if (!hasFetched) {
+    if (!hasFetched || !cachedMessages) {
       try {
         const messages = await api.dms.getMessages(room.id, 50);
         set((state) => {
@@ -141,16 +147,17 @@ export const useDMStore = create<DMState>((set, get) => ({
               delete counts[room.id];
             }
           }
+          const lru = setCachedMessagesLRU(
+            state.messagesByRoom,
+            roomLruOrder,
+            room.id,
+            merged,
+            { ...state.fetchedRooms, [room.id]: true }
+          );
           return {
             messages: state.activeRoom?.id === room.id ? merged : state.messages,
-            messagesByRoom: {
-              ...state.messagesByRoom,
-              [room.id]: merged,
-            },
-            fetchedRooms: {
-              ...state.fetchedRooms,
-              [room.id]: true,
-            },
+            messagesByRoom: lru.cache,
+            fetchedRooms: lru.fetched!,
             hasMoreByRoom: {
               ...state.hasMoreByRoom,
               [room.id]: messages.length === 50,
@@ -235,18 +242,25 @@ export const useDMStore = create<DMState>((set, get) => ({
       const uniqueOlder = olderMessages.filter((m) => !existingIds.has(m.id));
       const combined = [...uniqueOlder, ...currentRoomMessages];
 
-      set((curr) => ({
-        messages: curr.activeRoom?.id === roomId ? combined : curr.messages,
-        messagesByRoom: {
-          ...curr.messagesByRoom,
-          [roomId]: combined,
-        },
-        hasMoreByRoom: {
-          ...curr.hasMoreByRoom,
-          [roomId]: hasMore,
-        },
-        isLoadingMoreMessages: false,
-      }));
+      set((curr) => {
+        const lru = setCachedMessagesLRU(
+          curr.messagesByRoom,
+          roomLruOrder,
+          roomId,
+          combined,
+          curr.fetchedRooms
+        );
+        return {
+          messages: curr.activeRoom?.id === roomId ? combined : curr.messages,
+          messagesByRoom: lru.cache,
+          ...(lru.fetched ? { fetchedRooms: lru.fetched } : {}),
+          hasMoreByRoom: {
+            ...curr.hasMoreByRoom,
+            [roomId]: hasMore,
+          },
+          isLoadingMoreMessages: false,
+        };
+      });
     } catch (err) {
       console.error('Failed to load older DM messages:', err);
       set({ isLoadingMoreMessages: false });
@@ -386,12 +400,17 @@ export const useDMStore = create<DMState>((set, get) => ({
     set((state) => {
       if (state.activeRoom?.id !== activeRoom.id) return state;
       const roomMsgs = state.messagesByRoom[activeRoom.id] || [];
+      const lru = setCachedMessagesLRU(
+        state.messagesByRoom,
+        roomLruOrder,
+        activeRoom.id,
+        [...roomMsgs, tempMsg],
+        state.fetchedRooms
+      );
       return {
         messages: [...state.messages, tempMsg],
-        messagesByRoom: {
-          ...state.messagesByRoom,
-          [activeRoom.id]: [...roomMsgs, tempMsg],
-        },
+        messagesByRoom: lru.cache,
+        ...(lru.fetched ? { fetchedRooms: lru.fetched } : {}),
         firstUnreadMessageIdByRoom: {
           ...state.firstUnreadMessageIdByRoom,
           [activeRoom.id]: null,
@@ -618,10 +637,15 @@ export const useDMStore = create<DMState>((set, get) => ({
       const roomMsgs = state.messagesByRoom[message.dm_room_id] || [];
       const updatedRoomMsgs = mergeIncomingDM(roomMsgs);
 
-      const nextMessagesByRoom = {
-        ...state.messagesByRoom,
-        [message.dm_room_id]: updatedRoomMsgs,
-      };
+      const lru = setCachedMessagesLRU(
+        state.messagesByRoom,
+        roomLruOrder,
+        message.dm_room_id,
+        updatedRoomMsgs,
+        state.fetchedRooms
+      );
+      const nextMessagesByRoom = lru.cache;
+      const nextFetchedRooms = lru.fetched || state.fetchedRooms;
 
       // Reorder rooms: move this room to top and update last_message
       const nextRooms = [...state.rooms];
@@ -653,6 +677,7 @@ export const useDMStore = create<DMState>((set, get) => ({
           rooms: nextRooms,
           messages: nextMessages,
           messagesByRoom: nextMessagesByRoom,
+          fetchedRooms: nextFetchedRooms,
         };
       } else {
         const unread = new Set(state.unreadRooms);
@@ -674,6 +699,7 @@ export const useDMStore = create<DMState>((set, get) => ({
           unreadRooms: unread,
           roomUnreadCounts: counts,
           messagesByRoom: nextMessagesByRoom,
+          fetchedRooms: nextFetchedRooms,
           firstUnreadMessageIdByRoom: nextFirstUnread,
         };
       }

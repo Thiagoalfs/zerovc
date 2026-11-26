@@ -1,3 +1,4 @@
+#[cfg(target_os = "windows")]
 use crate::audio::resolve_audio_capture_binary;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -36,7 +37,6 @@ pub struct NativeScreenShareOptions {
     pub bitrate: u64,
     pub include_audio: bool,
     pub e2ee: Option<bool>,
-    pub e2ee_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -87,6 +87,27 @@ impl ScreenShareState {
         }
     }
 
+    pub async fn stop_immediate(&mut self) {
+        if let Some(mut stdin) = self.child_stdin.take() {
+            let _ = stdin.write_all(b"{\"type\":\"stop\"}\n").await;
+            let _ = stdin.flush().await;
+            let _ = stdin.shutdown().await;
+        }
+        if let Some(mut child) = self.active_child.take() {
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(b"{\"type\":\"stop\"}\n").await;
+                let _ = stdin.flush().await;
+                let _ = stdin.shutdown().await;
+            }
+            if tokio::time::timeout(std::time::Duration::from_millis(250), child.wait())
+                .await
+                .is_err()
+            {
+                let _ = child.kill().await;
+            }
+        }
+    }
+
     pub async fn write_stdin_line(&mut self, line: &str) -> Result<(), String> {
         let Some(stdin) = self.child_stdin.as_mut() else {
             return Err("screenshare-stdin-not-available".to_string());
@@ -101,6 +122,16 @@ impl ScreenShareState {
             .await
             .map_err(|e| format!("failed to flush screenshare stdin: {e}"))?;
         Ok(())
+    }
+}
+
+impl Drop for ScreenShareState {
+    fn drop(&mut self) {
+        drop(self.child_stdin.take());
+        if let Some(mut child) = self.active_child.take() {
+            drop(child.stdin.take());
+            let _ = child.start_kill();
+        }
     }
 }
 
@@ -214,8 +245,6 @@ pub async fn start_native_screenshare(
     let mut args = vec![
         "--url".to_string(),
         options.url,
-        "--token".to_string(),
-        options.token,
         "--source-id".to_string(),
         source_id,
         "--width".to_string(),
@@ -268,9 +297,26 @@ pub async fn start_native_screenshare(
         }
     };
 
-    let stdin = child.stdin.take();
+    let mut stdin = child.stdin.take();
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
+
+    // Send LiveKit JWT via stdin JSON instead of exposing it in process argv
+    let init_line = serde_json::json!({
+        "type": "init",
+        "token": options.token,
+    })
+    .to_string();
+    if let Some(ref mut s) = stdin {
+        if let Err(e) = s.write_all(format!("{init_line}\n").as_bytes()).await {
+            let _ = child.kill().await;
+            return NativeScreenShareResult {
+                success: false,
+                error: Some(format!("failed to write init token to screenshare stdin: {e}")),
+            };
+        }
+        let _ = s.flush().await;
+    }
 
     {
         let mut guard = state.lock().await;

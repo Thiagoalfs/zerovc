@@ -15,10 +15,9 @@ use crate::tray::{set_tray_voice_state as tray_set_voice, TrayVoiceState};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::Ordering;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
-use tauri_plugin_updater::UpdaterExt;
 use url::Url;
 
 pub const REMOTE_SERVER_URL: &str = "https://zerovc.safiroko.xyz";
@@ -41,9 +40,13 @@ pub fn is_allowed_origin(raw_url: &str) -> bool {
 }
 
 pub fn validate_external_url(raw_url: &str) -> Result<Url, String> {
+    if raw_url.chars().any(|c| c.is_control()) {
+        return Err("Blocked control characters in external URL".to_string());
+    }
     let parsed = Url::parse(raw_url).map_err(|e| format!("Invalid URL: {e}"))?;
     match parsed.scheme() {
-        "http" | "https" => Ok(parsed),
+        "http" | "https" if parsed.has_host() => Ok(parsed),
+        "http" | "https" => Err("External URL missing host".to_string()),
         other => Err(format!("Blocked external URL scheme: {other}")),
     }
 }
@@ -73,12 +76,6 @@ pub fn extract_valid_deep_link_path(raw_url: &str) -> Option<String> {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TitlebarUpdateAction {
-    pub action: String,
-}
-
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SplashColors {
@@ -96,11 +93,7 @@ pub async fn set_auth_token(
 
 #[tauri::command]
 pub async fn get_proxy_url(state: State<'_, AppState>) -> Result<Option<String>, String> {
-    Ok(state
-        .auth_vault
-        .proxy_addr()
-        .await
-        .map(|addr| format!("http://{addr}")))
+    Ok(state.auth_vault.proxy_url().await)
 }
 
 #[tauri::command]
@@ -200,451 +193,54 @@ pub fn is_cursor_in_window(app: AppHandle) -> bool {
         && cursor.y <= (pos.y as f64 + size.height as f64)
 }
 
-fn is_linux_non_appimage() -> bool {
-    cfg!(target_os = "linux") && std::env::var_os("APPIMAGE").is_none()
-}
-
-#[cfg(target_os = "linux")]
-#[derive(Clone, Copy)]
-enum LinuxPkgKind {
-    Deb,
-    Rpm,
-    Pacman,
-}
-
-#[cfg(target_os = "linux")]
-fn command_exists(bin: &str) -> bool {
-    std::env::var_os("PATH")
-        .map(|paths| std::env::split_paths(&paths).any(|dir| dir.join(bin).is_file()))
-        .unwrap_or(false)
-}
-
-#[cfg(target_os = "linux")]
-fn detect_linux_pkg_kind() -> Option<LinuxPkgKind> {
-    let os_release = std::fs::read_to_string("/etc/os-release")
-        .unwrap_or_default()
-        .to_lowercase();
-
-    if (os_release.contains("arch")
-        || os_release.contains("manjaro")
-        || os_release.contains("endeavouros")
-        || os_release.contains("cachyos")
-        || os_release.contains("garuda")
-        || std::path::Path::new("/etc/arch-release").exists())
-        && command_exists("pacman")
-    {
-        return Some(LinuxPkgKind::Pacman);
-    }
-
-    if (os_release.contains("fedora")
-        || os_release.contains("rhel")
-        || os_release.contains("centos")
-        || os_release.contains("rocky")
-        || os_release.contains("alma")
-        || os_release.contains("suse"))
-        && (command_exists("dnf") || command_exists("zypper") || command_exists("rpm"))
-    {
-        return Some(LinuxPkgKind::Rpm);
-    }
-
-    if (os_release.contains("ubuntu")
-        || os_release.contains("debian")
-        || os_release.contains("mint")
-        || os_release.contains("pop"))
-        && (command_exists("apt-get") || command_exists("dpkg"))
-    {
-        return Some(LinuxPkgKind::Deb);
-    }
-
-    if command_exists("apt-get") || command_exists("dpkg") {
-        Some(LinuxPkgKind::Deb)
-    } else if command_exists("dnf") || command_exists("zypper") || command_exists("rpm") {
-        Some(LinuxPkgKind::Rpm)
-    } else if command_exists("pacman") {
-        Some(LinuxPkgKind::Pacman)
-    } else {
-        None
-    }
-}
-
-#[cfg(target_os = "linux")]
-async fn download_and_install_linux_package(app: &AppHandle, version: &str) -> Result<(), String> {
-    let Some(pkg_kind) = detect_linux_pkg_kind() else {
-        let _ = open_url_with_os("https://zerovc.safiroko.xyz/download");
-        return Err("linux-package-manual-update".to_string());
-    };
-
-    if !command_exists("pkexec") {
-        let _ = open_url_with_os("https://zerovc.safiroko.xyz/download");
-        return Err("linux-package-manual-update".to_string());
-    }
-
-    let file_name = match pkg_kind {
-        LinuxPkgKind::Deb => "ZeroVC.deb",
-        LinuxPkgKind::Rpm => "ZeroVC.rpm",
-        LinuxPkgKind::Pacman => "ZeroVC.pacman",
-    };
-
-    let tag = if version.starts_with('v') {
-        version.to_string()
-    } else {
-        format!("v{version}")
-    };
-    let download_url =
-        format!("https://github.com/Thiagoalfs/zerovc/releases/download/{tag}/{file_name}");
-
-    let cache_dir = app
-        .path()
-        .app_cache_dir()
-        .map_err(|e| format!("Diretório de cache indisponível: {e}"))?;
-    let updates_dir = cache_dir.join("updates");
-    tokio::fs::create_dir_all(&updates_dir)
-        .await
-        .map_err(|e| format!("Falha ao preparar pasta de atualização: {e}"))?;
-    let dest_path = updates_dir.join(file_name);
-    let _ = tokio::fs::remove_file(&dest_path).await;
-
-    let _ = app.emit(
-        "update-progress",
-        serde_json::json!({
-            "percent": 15.0,
-            "bytesPerSecond": 0,
-            "transferred": 0,
-            "total": 0,
-        }),
-    );
-
-    let dest_str = dest_path.to_string_lossy().to_string();
-    let dl_status = if command_exists("curl") {
-        tokio::process::Command::new("curl")
-            .args(["-fSL", "--retry", "2", "-o", &dest_str, &download_url])
-            .status()
-            .await
-            .map_err(|e| format!("Falha ao executar curl: {e}"))?
-    } else if command_exists("wget") {
-        tokio::process::Command::new("wget")
-            .args(["-q", "-O", &dest_str, &download_url])
-            .status()
-            .await
-            .map_err(|e| format!("Falha ao executar wget: {e}"))?
-    } else {
-        let _ = open_url_with_os("https://zerovc.safiroko.xyz/download");
-        return Err("linux-package-manual-update".to_string());
-    };
-
-    if !dl_status.success() {
-        let _ = tokio::fs::remove_file(&dest_path).await;
-        return Err(format!("Falha ao baixar {file_name} ({tag})"));
-    }
-
-    let _ = app.emit(
-        "update-progress",
-        serde_json::json!({
-            "percent": 100.0,
-            "bytesPerSecond": 0,
-            "transferred": 1,
-            "total": 1,
-            "installing": true,
-        }),
-    );
-
-    let mut cmd = tokio::process::Command::new("pkexec");
-    match pkg_kind {
-        LinuxPkgKind::Deb => {
-            if command_exists("apt-get") {
-                cmd.args(["apt-get", "install", "-y", &dest_str]);
-            } else {
-                cmd.args(["dpkg", "-i", &dest_str]);
-            }
-        }
-        LinuxPkgKind::Rpm => {
-            if command_exists("dnf") {
-                cmd.args(["dnf", "install", "-y", &dest_str]);
-            } else if command_exists("zypper") {
-                cmd.args([
-                    "zypper",
-                    "--non-interactive",
-                    "install",
-                    "--allow-unsigned-rpm",
-                    &dest_str,
-                ]);
-            } else {
-                cmd.args(["rpm", "-Uvh", "--replacepkgs", &dest_str]);
-            }
-        }
-        LinuxPkgKind::Pacman => {
-            cmd.args(["pacman", "-U", "--noconfirm", &dest_str]);
-        }
-    }
-
-    let install_out = cmd
-        .output()
-        .await
-        .map_err(|e| format!("Falha ao iniciar instalador do sistema: {e}"))?;
-    let _ = tokio::fs::remove_file(&dest_path).await;
-
-    if !install_out.status.success() {
-        let code = install_out.status.code().unwrap_or(-1);
-        if code == 126 || code == 127 {
-            return Err("update-auth-cancelled".to_string());
-        }
-        let stderr = String::from_utf8_lossy(&install_out.stderr);
-        return Err(format!(
-            "Falha ao instalar {file_name}: {}",
-            stderr.trim()
-        ));
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn check_for_updates(app: AppHandle) {
-    match app.updater() {
-        Ok(updater) => match updater.check().await {
-            Ok(Some(update)) => {
-                let _ = app.emit(
-                    "update-available",
-                    serde_json::json!({
-                        "version": update.version,
-                        "releaseNotes": update.body,
-                    }),
-                );
-                let _ = app.emit(
-                    "update-check-result",
-                    serde_json::json!({
-                        "status": "available",
-                        "version": update.version,
-                    }),
-                );
-            }
-            Ok(None) => {
-                let _ = app.emit(
-                    "update-check-result",
-                    serde_json::json!({ "status": "up-to-date" }),
-                );
-            }
-            Err(err) => {
-                eprintln!("[Updater] check_for_updates failed: {err}");
-                let _ = app.emit(
-                    "update-check-result",
-                    serde_json::json!({ "status": "error", "message": err.to_string() }),
-                );
-            }
-        },
-        Err(err) => {
-            eprintln!("[Updater] updater unavailable: {err}");
-            let _ = app.emit(
-                "update-check-result",
-                serde_json::json!({ "status": "error", "message": err.to_string() }),
-            );
-        }
-    }
-}
-
-#[tauri::command]
-pub async fn start_download_update(app: AppHandle) {
-    if let Ok(updater) = app.updater() {
-        if let Ok(Some(update)) = updater.check().await {
-            let app_clone = app.clone();
-            let mut downloaded: usize = 0;
-            let res = update
-                .download_and_install(
-                    move |chunk_len, content_len| {
-                        downloaded += chunk_len;
-                        let total = content_len.unwrap_or(0);
-                        let percent = if total > 0 {
-                            (downloaded as f64 / total as f64) * 100.0
-                        } else {
-                            0.0
-                        };
-                        let _ = app_clone.emit(
-                            "update-progress",
-                            serde_json::json!({
-                                "percent": percent,
-                                "bytesPerSecond": 0,
-                                "transferred": downloaded,
-                                "total": total,
-                            }),
-                        );
-                    },
-                    || {},
-                )
-                .await;
-            if res.is_ok() {
-                let _ = app.emit(
-                    "update-downloaded",
-                    serde_json::json!({ "version": update.version }),
-                );
-            }
-        }
-    }
-}
-
-#[tauri::command]
-pub fn quit_and_install(app: AppHandle, state: State<'_, AppState>) {
-    state.is_quitting.store(true, Ordering::SeqCst);
-    app.restart();
-}
-
-#[tauri::command]
-pub async fn restart_to_update(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
-    let updater = app
-        .updater()
-        .map_err(|e| format!("Updater indisponível: {e}"))?;
-    let update = updater
-        .check()
-        .await
-        .map_err(|e| format!("Falha ao verificar atualização: {e}"))?
-        .ok_or_else(|| "Nenhuma atualização pendente encontrada".to_string())?;
-
-    let version = update.version.clone();
-
-    #[cfg(target_os = "linux")]
-    if is_linux_non_appimage() {
-        download_and_install_linux_package(&app, &version).await?;
-        let _ = app.emit(
-            "update-downloaded",
-            serde_json::json!({ "version": version }),
-        );
-        state.is_quitting.store(true, Ordering::SeqCst);
-        app.restart();
-    }
-
-    let app_clone = app.clone();
-    let mut downloaded: usize = 0;
-    update
-        .download_and_install(
-            move |chunk_len, content_len| {
-                downloaded += chunk_len;
-                let total = content_len.unwrap_or(0);
-                let percent = if total > 0 {
-                    ((downloaded as f64 / total as f64) * 100.0).min(100.0)
-                } else {
-                    0.0
-                };
-                let _ = app_clone.emit(
-                    "update-progress",
-                    serde_json::json!({
-                        "percent": percent,
-                        "bytesPerSecond": 0,
-                        "transferred": downloaded,
-                        "total": total,
-                    }),
-                );
-            },
-            || {},
-        )
-        .await
-        .map_err(|e| format!("Falha ao baixar/instalar atualização: {e}"))?;
-
-    let _ = app.emit(
-        "update-downloaded",
-        serde_json::json!({ "version": version }),
-    );
-    state.is_quitting.store(true, Ordering::SeqCst);
-    app.restart();
-}
-
-#[tauri::command]
-pub async fn apply_titlebar_update(app: AppHandle) -> TitlebarUpdateAction {
-    if let Ok(updater) = app.updater() {
-        if let Ok(Some(update)) = updater.check().await {
-            let version = update.version.clone();
-            let app_clone = app.clone();
-            tauri::async_runtime::spawn(async move {
-                #[cfg(target_os = "linux")]
-                if is_linux_non_appimage() {
-                    match download_and_install_linux_package(&app_clone, &version).await {
-                        Ok(()) => {
-                            if let Some(state) = app_clone.try_state::<AppState>() {
-                                state.is_quitting.store(true, Ordering::SeqCst);
-                            }
-                            app_clone.restart();
-                        }
-                        Err(err) => {
-                            eprintln!("[Updater] linux package update failed: {err}");
-                            let _ = app_clone.emit(
-                                "update-check-result",
-                                serde_json::json!({ "status": "error", "message": err }),
-                            );
-                        }
-                    }
-                    return;
-                }
-
-                let progress_app = app_clone.clone();
-                let mut downloaded: usize = 0;
-                match update
-                    .download_and_install(
-                        move |chunk_len, content_len| {
-                            downloaded += chunk_len;
-                            let total = content_len.unwrap_or(0);
-                            let percent = if total > 0 {
-                                ((downloaded as f64 / total as f64) * 100.0).min(100.0)
-                            } else {
-                                0.0
-                            };
-                            let _ = progress_app.emit(
-                                "update-progress",
-                                serde_json::json!({
-                                    "percent": percent,
-                                    "bytesPerSecond": 0,
-                                    "transferred": downloaded,
-                                    "total": total,
-                                }),
-                            );
-                        },
-                        || {},
-                    )
-                    .await
-                {
-                    Ok(()) => {
-                        if let Some(state) = app_clone.try_state::<AppState>() {
-                            state.is_quitting.store(true, Ordering::SeqCst);
-                        }
-                        app_clone.restart();
-                    }
-                    Err(err) => {
-                        eprintln!("[Updater] apply_titlebar_update failed: {err}");
-                        let _ = app_clone.emit(
-                            "update-check-result",
-                            serde_json::json!({ "status": "error", "message": err.to_string() }),
-                        );
-                    }
-                }
-            });
-            return TitlebarUpdateAction {
-                action: "downloading".to_string(),
-            };
-        }
-    }
-    TitlebarUpdateAction {
-        action: "reload".to_string(),
-    }
-}
-
 #[tauri::command]
 pub fn open_external(url: String) -> Result<(), String> {
-    let valid = validate_external_url(&url)?;
-    open_url_with_os(valid.as_str())
+    open_url_with_os(&url)
 }
 
 pub fn open_url_with_os(url: &str) -> Result<(), String> {
+    let valid = validate_external_url(url)?;
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", url])
-            .creation_flags(0x0800_0000)
-            .spawn()
-            .map_err(|e| format!("Failed to open external URL: {e}"))?;
+        use std::ffi::OsStr;
+        use std::os::windows::ffi::OsStrExt;
+        #[link(name = "shell32")]
+        extern "system" {
+            fn ShellExecuteW(
+                hwnd: *mut std::ffi::c_void,
+                lp_operation: *const u16,
+                lp_file: *const u16,
+                lp_parameters: *const u16,
+                lp_directory: *const u16,
+                n_show_cmd: i32,
+            ) -> isize;
+        }
+        fn to_wide(s: &str) -> Vec<u16> {
+            OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+        }
+        let op = to_wide("open");
+        let target = to_wide(valid.as_str());
+        let res = unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                op.as_ptr(),
+                target.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                1,
+            )
+        };
+        if res <= 32 {
+            return Err(format!(
+                "Failed to open external URL (ShellExecuteW code {res})"
+            ));
+        }
         return Ok(());
     }
     #[cfg(target_os = "linux")]
     {
         std::process::Command::new("xdg-open")
-            .arg(url)
+            .arg(valid.as_str())
             .spawn()
             .map_err(|e| format!("Failed to open external URL: {e}"))?;
         return Ok(());
@@ -652,7 +248,7 @@ pub fn open_url_with_os(url: &str) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open")
-            .arg(url)
+            .arg(valid.as_str())
             .spawn()
             .map_err(|e| format!("Failed to open external URL: {e}"))?;
         return Ok(());
@@ -896,197 +492,6 @@ pub async fn set_splash_colors(
 }
 
 #[tauri::command]
-pub async fn start_turnstile_verification(
-    app: AppHandle,
-    action: Option<String>,
-) -> Result<(), String> {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .map_err(|e| format!("Failed to bind local callback listener: {e}"))?;
-    let port = listener
-        .local_addr()
-        .map_err(|e| format!("Failed to read callback port: {e}"))?
-        .port();
-
-    let callback_url = format!("http://127.0.0.1:{port}/turnstile-callback");
-    let mut target = Url::parse(&format!("{REMOTE_SERVER_URL}/api/auth/turnstile-widget"))
-        .map_err(|e| format!("Invalid server URL: {e}"))?;
-    {
-        let mut pairs = target.query_pairs_mut();
-        pairs.append_pair("desktop", "1");
-        pairs.append_pair("callback", &callback_url);
-        if let Some(act) = action {
-            let clean: String = act
-                .chars()
-                .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
-                .take(32)
-                .collect();
-            if !clean.is_empty() {
-                pairs.append_pair("action", &clean);
-            }
-        }
-    }
-
-    let app_handle = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(300);
-        loop {
-            let accept_res = tokio::time::timeout_at(deadline, listener.accept()).await;
-            let Ok(Ok((mut socket, _))) = accept_res else {
-                break;
-            };
-            let mut buf = [0u8; 8192];
-            let Ok(n) = socket.read(&mut buf).await else {
-                continue;
-            };
-            if n == 0 {
-                continue;
-            }
-            let req_text = String::from_utf8_lossy(&buf[..n]);
-            let first_line = req_text.lines().next().unwrap_or("");
-            let path = first_line.split_whitespace().nth(1).unwrap_or("/");
-            if path.starts_with("/favicon.ico") {
-                let _ = socket
-                    .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-                    .await;
-                continue;
-            }
-
-            let parsed_token = Url::parse(&format!("http://127.0.0.1{path}"))
-                .ok()
-                .and_then(|u| {
-                    u.query_pairs()
-                        .find(|(k, _)| k == "token")
-                        .map(|(_, v)| v.into_owned())
-                })
-                .filter(|t| !t.trim().is_empty());
-
-            let body = "<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"utf-8\" /><title>ZeroVC</title><style>body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#1e1f22;color:#f2f3f5;font-family:sans-serif;text-align:center}.card{background:#2b2d31;padding:28px 32px;border-radius:12px;border:1px solid rgba(255,255,255,.08)}h2{margin:0 0 8px;font-size:18px}p{margin:0;color:#b5bac1;font-size:14px}</style></head><body><div class=\"card\"><h2>Verificação concluída!</h2><p>Você já pode fechar esta aba e voltar para o ZeroVC.</p></div><script>setTimeout(function(){window.close();},400);</script></body></html>";
-            let resp = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                body.len(),
-                body
-            );
-            let _ = socket.write_all(resp.as_bytes()).await;
-            let _ = socket.shutdown().await;
-
-            if let Some(tok) = parsed_token {
-                if let Some(state) = app_handle.try_state::<AppState>() {
-                    if let Ok(mut guard) = state.pending_turnstile_token.lock() {
-                        *guard = Some(tok.clone());
-                    }
-                }
-                let _ = app_handle.emit("turnstile-token-received", tok);
-                crate::tray::restore_and_focus_main(&app_handle);
-                break;
-            }
-        }
-    });
-
-    open_url_with_os(target.as_str())
-}
-
-#[tauri::command]
-pub fn consume_turnstile_token(state: State<'_, AppState>) -> Option<String> {
-    state
-        .pending_turnstile_token
-        .lock()
-        .ok()
-        .and_then(|mut guard| guard.take())
-}
-
-#[tauri::command]
-pub fn consume_desktop_auth_code(state: State<'_, AppState>) -> Option<String> {
-    state
-        .pending_desktop_auth_code
-        .lock()
-        .ok()
-        .and_then(|mut guard| guard.take())
-}
-
-#[tauri::command]
-pub async fn start_desktop_browser_login(
-    app: AppHandle,
-    mode: Option<String>,
-) -> Result<(), String> {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .map_err(|e| format!("Failed to bind desktop auth listener: {e}"))?;
-    let port = listener
-        .local_addr()
-        .map_err(|e| format!("Failed to read desktop auth port: {e}"))?
-        .port();
-
-    let callback_url = format!("http://127.0.0.1:{port}/auth-callback");
-    let mut target = Url::parse(&format!("{REMOTE_SERVER_URL}/desktop-auth"))
-        .map_err(|e| format!("Invalid server URL: {e}"))?;
-    {
-        let mut pairs = target.query_pairs_mut();
-        pairs.append_pair("callback", &callback_url);
-        if mode.as_deref() == Some("register") {
-            pairs.append_pair("mode", "register");
-        }
-    }
-
-    let app_handle = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(300);
-        loop {
-            let accept_res = tokio::time::timeout_at(deadline, listener.accept()).await;
-            let Ok(Ok((mut socket, _))) = accept_res else {
-                break;
-            };
-            let mut buf = [0u8; 8192];
-            let Ok(n) = socket.read(&mut buf).await else {
-                continue;
-            };
-            if n == 0 {
-                continue;
-            }
-            let req_text = String::from_utf8_lossy(&buf[..n]);
-            let first_line = req_text.lines().next().unwrap_or("");
-            let path = first_line.split_whitespace().nth(1).unwrap_or("/");
-            if path.starts_with("/favicon.ico") {
-                let _ = socket
-                    .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-                    .await;
-                continue;
-            }
-
-            let parsed_code = Url::parse(&format!("http://127.0.0.1{path}"))
-                .ok()
-                .and_then(|u| {
-                    u.query_pairs()
-                        .find(|(k, _)| k == "code")
-                        .map(|(_, v)| v.into_owned())
-                })
-                .filter(|c| !c.trim().is_empty());
-
-            let resp = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok";
-            let _ = socket.write_all(resp.as_bytes()).await;
-            let _ = socket.shutdown().await;
-
-            if let Some(code) = parsed_code {
-                if let Some(state) = app_handle.try_state::<AppState>() {
-                    if let Ok(mut guard) = state.pending_desktop_auth_code.lock() {
-                        *guard = Some(code.clone());
-                    }
-                }
-                let _ = app_handle.emit("desktop-auth-code", code);
-                crate::tray::restore_and_focus_main(&app_handle);
-                break;
-            }
-        }
-    });
-
-    open_url_with_os(target.as_str())
-}
-
-#[tauri::command]
 pub async fn set_audio_output_device(device_id: String) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
@@ -1304,9 +709,12 @@ mod tests {
     fn test_validate_external_url() {
         assert!(validate_external_url("https://github.com/safiroko/zerovc").is_ok());
         assert!(validate_external_url("http://localhost:8080").is_ok());
+        assert!(validate_external_url("https://example.com/?a=1&b=2%203|4^5").is_ok());
         assert!(validate_external_url("file:///C:/Windows/System32/calc.exe").is_err());
         assert!(validate_external_url("javascript:alert(1)").is_err());
         assert!(validate_external_url("zerovc://invite/abc").is_err());
+        assert!(validate_external_url("https://example.com/\ncalc").is_err());
+        assert!(validate_external_url("http://").is_err());
     }
 
     #[test]

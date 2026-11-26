@@ -12,6 +12,9 @@ import { keyRequestManager } from '../crypto/keyRequestManager';
 import { megolmManager } from '../crypto/megolmSession';
 import { deviceManager } from '../crypto/deviceManager';
 import { resolveFirstUnreadMessageId } from '../utils/unread';
+import { setCachedMessagesLRU, touchLruKey } from '../utils/lruMessageCache';
+
+const groupLruOrder: string[] = [];
 
 interface DMGroupState {
   groups: DMGroup[];
@@ -103,6 +106,9 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     } catch {}
 
     const cachedMessages = get().messagesByGroup[group.id];
+    if (cachedMessages) {
+      touchLruKey(groupLruOrder, group.id);
+    }
     const hasFetched = Boolean(get().fetchedGroups[group.id]);
 
     set((state) => {
@@ -132,7 +138,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
       };
     });
 
-    if (!hasFetched) {
+    if (!hasFetched || !cachedMessages) {
       try {
         const messages = await api.dmGroups.getMessages(group.id, 50);
         set((state) => {
@@ -157,16 +163,17 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
               delete counts[group.id];
             }
           }
+          const lru = setCachedMessagesLRU(
+            state.messagesByGroup,
+            groupLruOrder,
+            group.id,
+            merged,
+            { ...state.fetchedGroups, [group.id]: true }
+          );
           return {
             messages: state.activeGroup?.id === group.id ? merged : state.messages,
-            messagesByGroup: {
-              ...state.messagesByGroup,
-              [group.id]: merged,
-            },
-            fetchedGroups: {
-              ...state.fetchedGroups,
-              [group.id]: true,
-            },
+            messagesByGroup: lru.cache,
+            fetchedGroups: lru.fetched!,
             hasMoreByGroup: {
               ...state.hasMoreByGroup,
               [group.id]: (messages || []).length === 50,
@@ -268,18 +275,25 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
       const uniqueOlder = olderMessages.filter((m) => !existingIds.has(m.id));
       const combined = [...uniqueOlder, ...currentGroupMessages];
 
-      set((curr) => ({
-        messages: curr.activeGroup?.id === groupId ? combined : curr.messages,
-        messagesByGroup: {
-          ...curr.messagesByGroup,
-          [groupId]: combined,
-        },
-        hasMoreByGroup: {
-          ...curr.hasMoreByGroup,
-          [groupId]: hasMore,
-        },
-        isLoadingMoreMessages: false,
-      }));
+      set((curr) => {
+        const lru = setCachedMessagesLRU(
+          curr.messagesByGroup,
+          groupLruOrder,
+          groupId,
+          combined,
+          curr.fetchedGroups
+        );
+        return {
+          messages: curr.activeGroup?.id === groupId ? combined : curr.messages,
+          messagesByGroup: lru.cache,
+          ...(lru.fetched ? { fetchedGroups: lru.fetched } : {}),
+          hasMoreByGroup: {
+            ...curr.hasMoreByGroup,
+            [groupId]: hasMore,
+          },
+          isLoadingMoreMessages: false,
+        };
+      });
     } catch (err) {
       console.error('Failed to load older group messages:', err);
       set({ isLoadingMoreMessages: false });
@@ -461,12 +475,17 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
     set((state) => {
       if (state.activeGroup?.id !== activeGroup.id) return state;
       const groupMsgs = state.messagesByGroup[activeGroup.id] || [];
+      const lru = setCachedMessagesLRU(
+        state.messagesByGroup,
+        groupLruOrder,
+        activeGroup.id,
+        [...groupMsgs, tempMsg],
+        state.fetchedGroups
+      );
       return {
         messages: [...state.messages, tempMsg],
-        messagesByGroup: {
-          ...state.messagesByGroup,
-          [activeGroup.id]: [...groupMsgs, tempMsg],
-        },
+        messagesByGroup: lru.cache,
+        ...(lru.fetched ? { fetchedGroups: lru.fetched } : {}),
         firstUnreadMessageIdByGroup: {
           ...state.firstUnreadMessageIdByGroup,
           [activeGroup.id]: null,
@@ -677,10 +696,15 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
       const groupMsgs = state.messagesByGroup[message.group_id] || [];
       const updatedGroupMsgs = mergeIncomingGroupMsg(groupMsgs);
 
-      const nextMessagesByGroup = {
-        ...state.messagesByGroup,
-        [message.group_id]: updatedGroupMsgs,
-      };
+      const lru = setCachedMessagesLRU(
+        state.messagesByGroup,
+        groupLruOrder,
+        message.group_id,
+        updatedGroupMsgs,
+        state.fetchedGroups
+      );
+      const nextMessagesByGroup = lru.cache;
+      const nextFetchedGroups = lru.fetched || state.fetchedGroups;
 
       // Reorder groups: move to top
       const nextGroups = [...state.groups];
@@ -713,6 +737,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
           groups: nextGroups,
           messages: nextMsgs,
           messagesByGroup: nextMessagesByGroup,
+          fetchedGroups: nextFetchedGroups,
         };
       } else {
         const unread = new Set(state.unreadGroups);
@@ -734,6 +759,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
           unreadGroups: unread,
           groupUnreadCounts: counts,
           messagesByGroup: nextMessagesByGroup,
+          fetchedGroups: nextFetchedGroups,
           firstUnreadMessageIdByGroup: nextFirstUnread,
         };
       }

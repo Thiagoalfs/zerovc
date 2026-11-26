@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ZeroVC Opt-in E2EE - Pure Messaging Codec
  *
  * Implements Milestone M3 (Requirement R3 §8, §10.1, §11.2):
@@ -143,7 +143,7 @@ export class MessageCodec {
     currentEpoch: number;
     envelope: EnvelopeV1;
     senderDeviceId: string;
-    rosterDevices?: Array<{ device_id: string; user_id?: string }>;
+    rosterDevices?: Array<{ device_id: string; user_id?: string; curve25519_key?: string }>;
   }): Promise<{
     encrypted: true;
     e2ee_ciphertext: string;
@@ -169,7 +169,7 @@ export class MessageCodec {
     currentEpoch: number;
     envelope: EnvelopeV1;
     senderDeviceId: string;
-    rosterDevices?: Array<{ device_id: string; user_id?: string }>;
+    rosterDevices?: Array<{ device_id: string; user_id?: string; curve25519_key?: string }>;
   }): Promise<{
     encrypted: true;
     e2ee_ciphertext: string;

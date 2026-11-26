@@ -1,13 +1,18 @@
 name: Deploy to VPS via SSH
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI Validation"]
+    types:
+      - completed
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   deploy:
     name: Deploy via SSH
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
 
     steps:

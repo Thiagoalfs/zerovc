@@ -232,15 +232,29 @@ func (h *CommandHandler) processCommand(
 		if len(messageIDs) > 0 {
 			_, _ = h.db.Pool.Exec(ctx, "DELETE FROM messages WHERE id = ANY($1)", messageIDs)
 
+			var isPrivate bool
+			_ = h.db.Pool.QueryRow(ctx, "SELECT is_private FROM channels WHERE id = $1 AND guild_id = $2", *channelID, *guildID).Scan(&isPrivate)
+			restricted := channelHasViewRestrictions(ctx, h.db, *guildID, *channelID, isPrivate)
+			var allowedUsers []uuid.UUID
+			var allowedErr error
+			if restricted {
+				allowedUsers, allowedErr = GetPrivateChannelAllowedUserIDs(ctx, h.db, *guildID, *channelID)
+			}
+
 			for _, delID := range messageIDs {
-				h.hub.BroadcastToGuild(*guildID, models.WSEvent{
+				ev := models.WSEvent{
 					Type: models.EventMessageDelete,
 					Data: map[string]any{
 						"id":         delID,
 						"channel_id": *channelID,
 						"guild_id":   *guildID,
 					},
-				})
+				}
+				if !restricted {
+					h.hub.BroadcastToGuild(*guildID, ev)
+				} else if allowedErr == nil && len(allowedUsers) > 0 {
+					h.hub.BroadcastToUsers(allowedUsers, ev)
+				}
 			}
 		}
 

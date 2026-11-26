@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ZeroVC Opt-in E2EE - Megolm Group Session Management
  *
  * Implements Milestone M3 (Requirement R3 §8, §10.1, §10.2):
@@ -15,6 +15,8 @@ import { EnvelopeV1, serializeEnvelope, parseEnvelope } from './envelope';
 import { safeCryptoLogger } from './safeLogger';
 import { api } from '../lib/api';
 import { backupManager } from './backupManager';
+import { olmSessionManager } from './olmSession';
+import { rosterManager } from './rosterManager';
 
 export type { EnvelopeV1 };
 
@@ -105,19 +107,6 @@ export class MegolmManager {
       safeCryptoLogger.warn('Failed to auto-register self inbound session', err);
     }
 
-    if (sessionKey) {
-      await api.e2ee
-        .saveRoomKey({
-          conversation_type: conversationType || 'dm',
-          conversation_id: conversationId,
-          session_id: session.sessionId(),
-          session_key: sessionKey,
-          sender_device_id: senderDeviceId,
-          epoch: currentEpoch,
-        })
-        .catch(() => {});
-    }
-
     try {
       backupManager.triggerAutoBackup();
     } catch (err) {
@@ -140,7 +129,7 @@ export class MegolmManager {
   }
 
   /**
-   * Distributes a newly created Megolm session key to all active devices in the conversation roster.
+   * Distributes a newly created Megolm session key to all active devices in the conversation roster via Olm.
    */
   async distributeRoomKey(params: {
     conversationType: 'dm' | 'dm_group' | 'channel';
@@ -149,7 +138,7 @@ export class MegolmManager {
     sessionKey: string;
     epoch: number;
     senderDeviceId: string;
-    recipientDevices: Array<{ device_id: string; user_id?: string }>;
+    recipientDevices: Array<{ device_id: string; user_id?: string; curve25519_key?: string }>;
   }): Promise<{ queued: number }> {
     const recipients = params.recipientDevices.filter((d) => d.device_id && d.device_id !== params.senderDeviceId);
     if (recipients.length === 0) {
@@ -166,12 +155,38 @@ export class MegolmManager {
       sender_device_id: params.senderDeviceId,
     };
 
-    const messages = recipients.map((r) => ({
-      recipient_device_id: r.device_id,
-      sender_device_id: params.senderDeviceId,
-      msg_type: 'room_key',
-      payload: JSON.stringify(payload),
-    }));
+    const messages: Array<{
+      recipient_device_id: string;
+      sender_device_id: string;
+      msg_type: string;
+      payload: string;
+    }> = [];
+
+    for (const r of recipients) {
+      try {
+        const encrypted = await olmSessionManager.encryptPayloadForDevice(
+          r.device_id,
+          payload,
+          r.curve25519_key,
+          r.user_id
+        );
+        messages.push({
+          recipient_device_id: r.device_id,
+          sender_device_id: params.senderDeviceId,
+          msg_type: 'room_key',
+          payload: JSON.stringify(encrypted),
+        });
+      } catch (err: any) {
+        safeCryptoLogger.warn('Skipping room_key for device without Olm session/OTK', {
+          deviceId: r.device_id,
+          error: err?.message,
+        });
+      }
+    }
+
+    if (messages.length === 0) {
+      return { queued: 0 };
+    }
 
     try {
       const res = await api.e2ee.sendToDevice(messages);
@@ -232,13 +247,17 @@ export class MegolmManager {
   ): Promise<void> {
     await ensureVodozemacInitialized();
 
-    const inbound = new InboundGroupSession(sessionKey);
+    let inbound: InboundGroupSession;
+    try {
+      inbound = new InboundGroupSession(sessionKey);
+    } catch {
+      inbound = InboundGroupSession.import(sessionKey);
+    }
     const pickle = inbound.pickle();
 
     await keyStore.encryptAndStorePickle('megolm_inbound', sessionId, pickle, {
       sessionId,
       conversationId,
-      sessionKey,
       senderDeviceId,
       epoch,
       firstKnownIndex: inbound.firstKnownIndex(),
@@ -246,19 +265,6 @@ export class MegolmManager {
     });
 
     safeCryptoLogger.debug('Registered inbound Megolm session', { sessionId, conversationId, epoch });
-
-    // Mirror inbound session key to authorized server room keys vault
-    if (sessionKey && conversationId && sessionId) {
-      api.e2ee
-        .saveRoomKey({
-          conversation_id: conversationId,
-          session_id: sessionId,
-          session_key: sessionKey,
-          sender_device_id: senderDeviceId,
-          epoch,
-        })
-        .catch(() => {});
-    }
 
     try {
       backupManager.triggerAutoBackup();
@@ -351,12 +357,39 @@ export class MegolmManager {
         sender_device_id: myDeviceId,
       };
 
+      let peerCurveKey: string | undefined;
+      let peerUserId: string | undefined;
+      const activeRoster = rosterManager.getActiveRoster(request.conversation_id);
+      const rosterMatch = activeRoster?.devices?.find((d) => d.device_id === request.requester_device_id);
+      if (rosterMatch) {
+        peerCurveKey = rosterMatch.curve25519_key;
+        peerUserId = rosterMatch.user_id;
+      } else {
+        try {
+          const remote = request.conversation_type === 'channel'
+            ? await api.e2ee.getChannelAudience(request.conversation_id)
+            : await api.e2ee.getLatestRoster(request.conversation_id);
+          const remoteMatch = remote?.devices?.find((d: any) => d.device_id === request.requester_device_id);
+          if (remoteMatch) {
+            peerCurveKey = remoteMatch.curve25519_key;
+            peerUserId = remoteMatch.user_id;
+          }
+        } catch {}
+      }
+
+      const encrypted = await olmSessionManager.encryptPayloadForDevice(
+        request.requester_device_id,
+        payload,
+        peerCurveKey,
+        peerUserId
+      );
+
       await api.e2ee.sendToDevice([
         {
           recipient_device_id: request.requester_device_id,
           sender_device_id: myDeviceId,
           msg_type: 'room_key',
-          payload: JSON.stringify(payload),
+          payload: JSON.stringify(encrypted),
         },
       ]);
       safeCryptoLogger.debug('Responded to key_request', { sessionId: request.session_id, requester: request.requester_device_id });
@@ -446,92 +479,14 @@ export class MegolmManager {
   }
 
   /**
-   * Scans all locally known inbound and outbound Megolm sessions in IndexedDB KeyStore
-   * and synchronizes them in batch to the server's room keys vault and cloud backup.
+   * Triggers encrypted cloud backup of local Megolm sessions without uploading plaintext keys.
    */
   async syncAllLocalKeysToServer(): Promise<{ syncedCount: number }> {
     try {
-      await ensureVodozemacInitialized();
-      const keysToSync: Array<{
-        conversation_type?: string;
-        conversation_id: string;
-        session_id: string;
-        session_key: string;
-        sender_device_id?: string;
-        epoch?: number;
-      }> = [];
-      const seenSessions = new Set<string>();
-
-      // 1. Collect from megolm_inbound
-      const inboundRecords = await keyStore.getAllRecords<any>('megolm_inbound');
-      for (const rec of inboundRecords) {
-        if (rec && rec.conversationId && rec.sessionId && rec.sessionKey && !seenSessions.has(rec.sessionId)) {
-          keysToSync.push({
-            conversation_id: rec.conversationId,
-            session_id: rec.sessionId,
-            session_key: rec.sessionKey,
-            sender_device_id: rec.senderDeviceId || '',
-            epoch: typeof rec.epoch === 'number' ? rec.epoch : 0,
-          });
-          seenSessions.add(rec.sessionId);
-        }
-      }
-
-      // 2. Collect from megolm_outbound
-      const outboundRecords = await keyStore.getAllRecords<any>('megolm_outbound');
-      for (const rec of outboundRecords) {
-        if (rec && rec.conversationId && rec.sessionId && !seenSessions.has(rec.sessionId)) {
-          let sKey = rec.sessionKey;
-          if (!sKey) {
-            try {
-              const pickle = await keyStore.retrieveAndDecryptPickle('megolm_outbound', rec.conversationId);
-              if (pickle) {
-                const session = GroupSession.fromPickle(pickle);
-                sKey = session.sessionKey();
-              }
-            } catch {}
-          }
-          if (sKey) {
-            keysToSync.push({
-              conversation_id: rec.conversationId,
-              session_id: rec.sessionId,
-              session_key: sKey,
-              sender_device_id: 'self',
-              epoch: typeof rec.epoch === 'number' ? rec.epoch : 0,
-            });
-            seenSessions.add(rec.sessionId);
-          }
-        }
-      }
-
-      if (keysToSync.length === 0) {
-        return { syncedCount: 0 };
-      }
-
-      // 3. Send to server in batches of 50
-      let syncedCount = 0;
-      const CHUNK_SIZE = 50;
-      for (let i = 0; i < keysToSync.length; i += CHUNK_SIZE) {
-        const chunk = keysToSync.slice(i, i + CHUNK_SIZE);
-        try {
-          await api.e2ee.saveRoomKeysBatch(chunk);
-          syncedCount += chunk.length;
-        } catch (batchErr) {
-          safeCryptoLogger.warn('Failed to upload batch of room keys to server', {
-            offset: i,
-            err: batchErr,
-          });
-        }
-      }
-
-      // 4. Trigger auto-backup if vault is active
-      try {
-        backupManager.triggerAutoBackup();
-      } catch {}
-
-      return { syncedCount };
+      const res = await backupManager.ensureActiveBackup();
+      return { syncedCount: res?.key_count || 0 };
     } catch (err) {
-      safeCryptoLogger.error('Failed to sync local keys to server', err);
+      safeCryptoLogger.error('Failed to sync local keys to encrypted backup', err);
       return { syncedCount: 0 };
     }
   }

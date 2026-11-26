@@ -12,11 +12,40 @@ import (
 	"github.com/zerovc/zerovc/backend/internal/auth"
 )
 
+const (
+	defaultBucketStaleTTL = 15 * time.Minute
+	defaultMaxBuckets     = 10000
+)
+
 type tokenBucket struct {
 	tokens     float64
 	maxTokens  float64
 	refillRate float64 // tokens per second
 	lastRefill time.Time
+}
+
+func evictBucketsLocked[K comparable](buckets map[K]*tokenBucket, now time.Time, maxBuckets int) {
+	for k, b := range buckets {
+		if now.Sub(b.lastRefill) > defaultBucketStaleTTL {
+			delete(buckets, k)
+		}
+	}
+	for len(buckets) >= maxBuckets {
+		var oldestKey K
+		var oldestTime time.Time
+		first := true
+		for k, b := range buckets {
+			if first || b.lastRefill.Before(oldestTime) {
+				oldestKey = k
+				oldestTime = b.lastRefill
+				first = false
+			}
+		}
+		if first {
+			break
+		}
+		delete(buckets, oldestKey)
+	}
 }
 
 // UserRateLimiter throttles authenticated requests keyed by user UUID.
@@ -64,6 +93,9 @@ func (l *UserRateLimiter) Allow(userID uuid.UUID) (bool, int) {
 	now := time.Now()
 	b, exists := l.buckets[userID]
 	if !exists {
+		if len(l.buckets) >= defaultMaxBuckets {
+			evictBucketsLocked(l.buckets, now, defaultMaxBuckets)
+		}
 		l.buckets[userID] = &tokenBucket{
 			tokens:     l.maxTokens - 1,
 			maxTokens:  l.maxTokens,
@@ -173,6 +205,9 @@ func (l *KeyedRateLimiter) Allow(key string) (bool, int) {
 	now := time.Now()
 	b, exists := l.buckets[key]
 	if !exists {
+		if len(l.buckets) >= defaultMaxBuckets {
+			evictBucketsLocked(l.buckets, now, defaultMaxBuckets)
+		}
 		l.buckets[key] = &tokenBucket{
 			tokens:     l.maxTokens - 1,
 			maxTokens:  l.maxTokens,

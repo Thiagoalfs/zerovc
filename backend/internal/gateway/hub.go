@@ -245,25 +245,33 @@ func (h *Hub) GetRelatedUserIDs(userID uuid.UUID) []uuid.UUID {
 	return out
 }
 
+func (h *Hub) sendBroadcast(msg BroadcastMessage) {
+	select {
+	case h.Broadcast <- msg:
+	default:
+		log.Printf("[Gateway] Broadcast channel full; dropping event %s", msg.Event.Type)
+	}
+}
+
 func (h *Hub) BroadcastToGuild(guildID uuid.UUID, event models.WSEvent) {
-	h.Broadcast <- BroadcastMessage{
+	h.sendBroadcast(BroadcastMessage{
 		GuildID: &guildID,
 		Event:   event,
-	}
+	})
 }
 
 func (h *Hub) BroadcastToUsers(userIDs []uuid.UUID, event models.WSEvent) {
-	h.Broadcast <- BroadcastMessage{
+	h.sendBroadcast(BroadcastMessage{
 		UserIDs: userIDs,
 		Event:   event,
-	}
+	})
 }
 
 func (h *Hub) BroadcastGlobal(event models.WSEvent) {
-	h.Broadcast <- BroadcastMessage{
+	h.sendBroadcast(BroadcastMessage{
 		GuildID: nil,
 		Event:   event,
-	}
+	})
 }
 
 func (h *Hub) SendToUser(userID uuid.UUID, event models.WSEvent) {

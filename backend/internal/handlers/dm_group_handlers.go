@@ -164,6 +164,7 @@ func (h *DMGroupHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	groups := make([]models.DMGroup, 0)
+	groupIDs := make([]uuid.UUID, 0)
 	for rows.Next() {
 		var g models.DMGroup
 		var lastMsgID *uuid.UUID
@@ -176,7 +177,6 @@ func (h *DMGroupHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 			&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.E2EEEnabled, &g.RotationEpoch, &g.CreatedAt,
 			&lastMsgID, &lastMsgContent, &lastMsgEncrypted, &lastMsgCiphertext, &lastMsgMeta, &lastMsgCreatedAt,
 		); err == nil {
-			g.Members = h.getGroupMembers(r.Context(), g.ID)
 			if lastMsgID != nil && lastMsgCreatedAt != nil {
 				g.LastMessage = &models.DMGroupMessage{
 					ID:             *lastMsgID,
@@ -187,7 +187,38 @@ func (h *DMGroupHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 					CreatedAt:      *lastMsgCreatedAt,
 				}
 			}
+			g.Members = make([]models.UserPublic, 0)
 			groups = append(groups, g)
+			groupIDs = append(groupIDs, g.ID)
+		}
+	}
+
+	if len(groupIDs) > 0 {
+		membersByGroup := make(map[uuid.UUID][]models.UserPublic, len(groupIDs))
+		mRows, mErr := h.db.Pool.Query(r.Context(), `
+			SELECT gm.group_id, u.id, u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status
+			FROM dm_group_members gm
+			INNER JOIN users u ON u.id = gm.user_id
+			WHERE gm.group_id = ANY($1)
+			ORDER BY gm.joined_at ASC
+		`, groupIDs)
+		if mErr == nil {
+			defer mRows.Close()
+			for mRows.Next() {
+				var gid uuid.UUID
+				var u models.UserPublic
+				if mRows.Scan(&gid, &u.ID, &u.Username, &u.DisplayName, &u.AvatarURL, &u.BannerURL, &u.Bio, &u.Status, &u.CustomStatus) == nil {
+					if h.hub != nil && !h.hub.IsUserOnline(u.ID) {
+						u.Status = "offline"
+					}
+					membersByGroup[gid] = append(membersByGroup[gid], u)
+				}
+			}
+		}
+		for i := range groups {
+			if members, ok := membersByGroup[groups[i].ID]; ok {
+				groups[i].Members = members
+			}
 		}
 	}
 
@@ -322,22 +353,73 @@ func (h *DMGroupHandler) AddMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check current count
-	var currentCount int
-	h.db.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM dm_group_members WHERE group_id = $1", groupID).Scan(&currentCount)
+	seenNew := make(map[uuid.UUID]bool, len(req.MemberIDs))
+	candidateIDs := make([]uuid.UUID, 0, len(req.MemberIDs))
+	for _, mID := range req.MemberIDs {
+		if mID != uuid.Nil && !seenNew[mID] {
+			seenNew[mID] = true
+			candidateIDs = append(candidateIDs, mID)
+		}
+	}
+	if len(candidateIDs) == 0 {
+		http.Error(w, `{"error":"member_ids required"}`, http.StatusBadRequest)
+		return
+	}
 
-	if currentCount+len(req.MemberIDs) > 15 {
+	tx, err := h.db.Pool.Begin(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to start transaction"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	var g models.DMGroup
+	err = tx.QueryRow(r.Context(), `
+		SELECT id, name, icon_url, owner_id, COALESCE(e2ee_enabled, false), COALESCE(rotation_epoch, 1), created_at
+		FROM dm_groups WHERE id = $1
+		FOR UPDATE
+	`, groupID).Scan(&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.E2EEEnabled, &g.RotationEpoch, &g.CreatedAt)
+	if err != nil {
+		http.Error(w, `{"error":"group not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Load current members atomically inside the locked transaction
+	existingMap := make(map[uuid.UUID]bool)
+	mRows, err := tx.Query(r.Context(), "SELECT user_id FROM dm_group_members WHERE group_id = $1", groupID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to check group members"}`, http.StatusInternalServerError)
+		return
+	}
+	for mRows.Next() {
+		var uid uuid.UUID
+		if mRows.Scan(&uid) == nil {
+			existingMap[uid] = true
+		}
+	}
+	mRows.Close()
+
+	if !existingMap[userID] {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
+	toAdd := make([]uuid.UUID, 0, len(candidateIDs))
+	for _, mID := range candidateIDs {
+		if !existingMap[mID] {
+			toAdd = append(toAdd, mID)
+		}
+	}
+
+	if len(existingMap)+len(toAdd) > 15 {
 		http.Error(w, `{"error":"o grupo não pode ultrapassar 15 membros"}`, http.StatusBadRequest)
 		return
 	}
 
 	// Check blocks between added users and existing members
-	for _, mID := range req.MemberIDs {
-		if mID == uuid.Nil {
-			continue
-		}
+	for _, mID := range toAdd {
 		var isBlocked bool
-		h.db.Pool.QueryRow(r.Context(), `
+		_ = tx.QueryRow(r.Context(), `
 			SELECT EXISTS(
 				SELECT 1 FROM user_blocks ub
 				INNER JOIN dm_group_members dgm ON dgm.group_id = $1
@@ -351,22 +433,29 @@ func (h *DMGroupHandler) AddMembers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	for _, mID := range req.MemberIDs {
-		if mID != uuid.Nil {
-			h.db.Pool.Exec(r.Context(), "INSERT INTO dm_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", groupID, mID)
+	for _, mID := range toAdd {
+		if _, err := tx.Exec(r.Context(), "INSERT INTO dm_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", groupID, mID); err != nil {
+			http.Error(w, `{"error":"failed to add group members"}`, http.StatusInternalServerError)
+			return
 		}
 	}
 
-	var g models.DMGroup
-	h.db.Pool.QueryRow(r.Context(), `
-		SELECT id, name, icon_url, owner_id, COALESCE(e2ee_enabled, false), COALESCE(rotation_epoch, 1), created_at
-		FROM dm_groups WHERE id = $1
-	`, groupID).Scan(&g.ID, &g.Name, &g.IconURL, &g.OwnerID, &g.E2EEEnabled, &g.RotationEpoch, &g.CreatedAt)
+	if g.E2EEEnabled && len(toAdd) > 0 {
+		g.RotationEpoch++
+		if _, err := tx.Exec(r.Context(), "UPDATE dm_groups SET rotation_epoch = $1 WHERE id = $2", g.RotationEpoch, groupID); err != nil {
+			http.Error(w, `{"error":"failed to update group epoch"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		http.Error(w, `{"error":"failed to commit group update"}`, http.StatusInternalServerError)
+		return
+	}
+
 	g.Members = h.getGroupMembers(r.Context(), groupID)
 
-	if g.E2EEEnabled {
-		g.RotationEpoch++
-		h.db.Pool.Exec(r.Context(), "UPDATE dm_groups SET rotation_epoch = $1 WHERE id = $2", g.RotationEpoch, groupID)
+	if g.E2EEEnabled && len(toAdd) > 0 {
 		rotationEvent := models.WSEvent{
 			Type: models.EventE2EERotationRequired,
 			Data: map[string]any{
@@ -1201,6 +1290,13 @@ func (h *DMGroupHandler) UpdateMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var isMember bool
+	_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM dm_group_members WHERE group_id = $1 AND user_id = $2)", groupID, userID).Scan(&isMember)
+	if !isMember {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
 	var req struct {
 		Content string `json:"content"`
 	}
@@ -1309,7 +1405,7 @@ func (h *DMGroupHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.group_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, m.created_at,
+		SELECT m.id, m.group_id, m.author_id, m.content, m.attachments, m.embeds, m.invoker_id, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, COALESCE(m.encrypted, false), m.e2ee_ciphertext, m.e2ee_meta, m.created_at,
 		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
 		       iu.id, iu.username, iu.display_name, iu.avatar_url
 		FROM dm_group_messages m
@@ -1334,7 +1430,7 @@ func (h *DMGroupHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 		var invokerUsername, invokerDisplayName, invokerAvatarURL *string
 
 		if err := rows.Scan(
-			&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &attachBytes, &embedsBytes, &invokerID, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.EditedAt, &msg.CreatedAt,
+			&msg.ID, &msg.GroupID, &msg.AuthorID, &msg.Content, &attachBytes, &embedsBytes, &invokerID, &msg.ReplyToID, &msg.IsPinned, &msg.IsEdited, &msg.IsTTS, &msg.EditedAt, &msg.Encrypted, &msg.E2EECiphertext, &msg.E2EEMeta, &msg.CreatedAt,
 			&msg.Author.Username, &msg.Author.DisplayName, &msg.Author.AvatarURL, &msg.Author.BannerURL, &msg.Author.Bio, &msg.Author.Status, &msg.Author.CustomStatus,
 			&invokerUserID, &invokerUsername, &invokerDisplayName, &invokerAvatarURL,
 		); err == nil {

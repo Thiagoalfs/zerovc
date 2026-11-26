@@ -146,16 +146,28 @@ jobs:
         run: npx tauri build --bundles deb,rpm,appimage
 
       - name: Collect Linux Artifacts
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           mkdir -p release-out
           DEB=$(find client/src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' | head -n 1)
           RPM=$(find client/src-tauri/target/release/bundle/rpm -maxdepth 1 -name '*.rpm' | head -n 1)
+          PACMAN=$(find client/src-tauri/target/release/bundle -maxdepth 2 \( -name '*.pacman' -o -name '*.pkg.tar.*' \) | head -n 1 || true)
           APPIMAGE=$(find client/src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -n 1)
           [ -n "$DEB" ] && cp -f "$DEB" release-out/ZeroVC.deb
           [ -n "$RPM" ] && cp -f "$RPM" release-out/ZeroVC.rpm
+          [ -n "$PACMAN" ] && cp -f "$PACMAN" release-out/ZeroVC.pacman
           if [ -n "$APPIMAGE" ]; then
             cp -f "$APPIMAGE" release-out/ZeroVC.AppImage
             [ -f "${APPIMAGE}.sig" ] && cp -f "${APPIMAGE}.sig" release-out/ZeroVC.AppImage.sig
+          fi
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            for pkg in release-out/ZeroVC.deb release-out/ZeroVC.rpm release-out/ZeroVC.pacman; do
+              if [ -f "$pkg" ]; then
+                (cd client && npx tauri signer sign "../$pkg")
+              fi
+            done
           fi
           ls -la release-out
 
@@ -270,6 +282,7 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
         run: |
           if [ -z "$VPS_HOST" ] || [ -z "$VPS_USER" ] || [ -z "$VPS_SSH_KEY" ]; then
             echo "VPS secrets not configured; skipping VPS upload."
@@ -279,11 +292,16 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/vps_key
           chmod 600 ~/.ssh/vps_key
-          ssh-keyscan -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          if [ -n "$VPS_SSH_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$VPS_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+            HOST_KEY_OPT="-o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+          else
+            HOST_KEY_OPT="-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+          fi
 
-          SSH_OPTS="-i ~/.ssh/vps_key -p $PORT -o StrictHostKeyChecking=no"
+          SSH_OPTS="-i ~/.ssh/vps_key -p $PORT $HOST_KEY_OPT"
           REPO_DIR=$(ssh $SSH_OPTS "$VPS_USER@$VPS_HOST" 'if [ -d /root/zerovc ]; then echo /root/zerovc; else echo "$HOME/zerovc"; fi')
           ssh $SSH_OPTS "$VPS_USER@$VPS_HOST" "mkdir -p \"$REPO_DIR/backend/web/downloads\" \"$HOME/zerovc-downloads\""
-          scp -i ~/.ssh/vps_key -P "$PORT" -o StrictHostKeyChecking=no downloads-out/* "$VPS_USER@$VPS_HOST:$HOME/zerovc-downloads/"
+          scp -i ~/.ssh/vps_key -P "$PORT" $HOST_KEY_OPT downloads-out/* "$VPS_USER@$VPS_HOST:$HOME/zerovc-downloads/"
           ssh $SSH_OPTS "$VPS_USER@$VPS_HOST" "cp -f \"$HOME/zerovc-downloads/\"* \"$REPO_DIR/backend/web/downloads/\""
           rm -f ~/.ssh/vps_key

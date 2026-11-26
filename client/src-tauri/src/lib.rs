@@ -6,9 +6,11 @@ pub mod media_audio_out;
 pub mod media_bridge;
 pub mod media_camera;
 pub mod media_video_hub;
+pub mod oauth;
 pub mod process_monitor;
 pub mod screenshare;
 pub mod tray;
+pub mod updater;
 
 use audio::AudioCaptureState;
 use auth_vault::AuthVault;
@@ -181,8 +183,7 @@ pub fn run() {
             let s = url.as_str();
             let is_turnstile =
                 url.scheme() == "https" && url.host_str() == Some("challenges.cloudflare.com");
-            if s == "about:blank" || s.starts_with("data:") || is_allowed_origin(s) || is_turnstile
-            {
+            if s == "about:blank" || is_allowed_origin(s) || is_turnstile {
                 return true;
             }
             if matches!(url.scheme(), "http" | "https") {
@@ -356,11 +357,11 @@ pub fn run() {
             commands::window_set_fullscreen,
             commands::window_is_fullscreen,
             commands::is_cursor_in_window,
-            commands::check_for_updates,
-            commands::start_download_update,
-            commands::quit_and_install,
-            commands::restart_to_update,
-            commands::apply_titlebar_update,
+            updater::check_for_updates,
+            updater::start_download_update,
+            updater::quit_and_install,
+            updater::restart_to_update,
+            updater::apply_titlebar_update,
             commands::open_external,
             commands::reload_app,
             commands::relaunch_app,
@@ -385,10 +386,10 @@ pub fn run() {
             commands::set_custom_streamer_processes,
             commands::get_streamer_software_status,
             commands::set_splash_colors,
-            commands::start_turnstile_verification,
-            commands::consume_turnstile_token,
-            commands::consume_desktop_auth_code,
-            commands::start_desktop_browser_login,
+            oauth::start_turnstile_verification,
+            oauth::consume_turnstile_token,
+            oauth::consume_desktop_auth_code,
+            oauth::start_desktop_browser_login,
             commands::set_audio_output_device,
             commands::log_frontend_error,
             commands::media_connect,
@@ -410,6 +411,24 @@ pub fn run() {
             commands::media_ratchet_e2ee_key,
             commands::media_get_diagnostic_stats,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running ZeroVC Tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building ZeroVC Tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(state) = app_handle.try_state::<AppState>() {
+                    state.is_quitting.store(true, Ordering::SeqCst);
+                    tauri::async_runtime::block_on(async {
+                        {
+                            let mut ss = state.screenshare_state.lock().await;
+                            ss.stop_immediate().await;
+                        }
+                        {
+                            let mut aud = state.audio_state.lock().await;
+                            aud.stop();
+                        }
+                        state.media_bridge.disconnect().await;
+                    });
+                }
+            }
+        });
 }

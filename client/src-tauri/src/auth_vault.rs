@@ -2,21 +2,24 @@ use rustls::pki_types::ServerName;
 use rustls::ClientConfig;
 use rustls_platform_verifier::BuilderVerifierExt;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Semaphore};
 use tokio_rustls::TlsConnector;
 
 const KEYRING_SERVICE: &str = "xyz.safiroko.zerovc";
 const KEYRING_ACCOUNT: &str = "auth-token";
 const MAX_HEADER_BYTES: usize = 64 * 1024;
+const MAX_CONCURRENT_PROXY_CONNS: usize = 64;
+const PROXY_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const PROXY_HEAD_TIMEOUT: Duration = Duration::from_secs(10);
+const PROXY_UPSTREAM_HEAD_TIMEOUT: Duration = Duration::from_secs(30);
 const PROXY_SECRET_HEADER: &str = "x-zerovc-proxy-secret";
 const PROXY_TARGET_HEADER: &str = "x-zerovc-target";
+const PROXY_PATH_PREFIX: &str = "/__zv_proxy/";
 
-static SECRET_COUNTER: AtomicU64 = AtomicU64::new(1);
 static TLS_CONFIG: OnceLock<Arc<ClientConfig>> = OnceLock::new();
 
 fn get_tls_config() -> Result<Arc<ClientConfig>, String> {
@@ -74,6 +77,12 @@ impl AuthVault {
         *self.proxy_addr.read().await
     }
 
+    pub async fn proxy_url(&self) -> Option<String> {
+        self.proxy_addr()
+            .await
+            .map(|addr| format!("http://{addr}{PROXY_PATH_PREFIX}{}", self.proxy_secret))
+    }
+
     /// Starts the loopback HTTP/WS auth proxy on `127.0.0.1:<ephemeral>`.
     pub async fn start_proxy(&self) -> Result<SocketAddr, String> {
         self.start_proxy_with_default(None).await
@@ -97,15 +106,23 @@ impl AuthVault {
 
         let token = Arc::clone(&self.token);
         let secret = Arc::clone(&self.proxy_secret);
+        let conn_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_PROXY_CONNS));
 
         tokio::spawn(async move {
             loop {
                 match listener.accept().await {
-                    Ok((stream, _peer)) => {
+                    Ok((mut stream, _peer)) => {
+                        let Ok(permit) = conn_semaphore.clone().try_acquire_owned() else {
+                            let _ = stream
+                                .write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                                .await;
+                            continue;
+                        };
                         let token_ref = Arc::clone(&token);
                         let secret_ref = Arc::clone(&secret);
                         let default_up = default_upstream.clone();
                         tokio::spawn(async move {
+                            let _permit = permit;
                             let _ = handle_proxy_connection(
                                 stream,
                                 &secret_ref,
@@ -134,21 +151,11 @@ impl Default for AuthVault {
 }
 
 fn generate_session_secret() -> String {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let pid = std::process::id() as u128;
-    let seq = SECRET_COUNTER.fetch_add(1, Ordering::Relaxed) as u128;
-
-    let mut state = nanos ^ (pid << 64) ^ (seq.wrapping_mul(0x9e37_79b9_7f4a_7c15));
+    let mut bytes = [0u8; 32];
+    getrandom::getrandom(&mut bytes).expect("OS CSPRNG unavailable");
     let mut out = String::with_capacity(64);
-    for _ in 0..8 {
-        state ^= state << 13;
-        state ^= state >> 7;
-        state ^= state << 17;
-        out.push_str(&format!("{:08x}", (state & 0xffff_ffff) as u32));
-        state = state.rotate_left(29).wrapping_add(0x517cc1b727220a95);
+    for b in bytes {
+        out.push_str(&format!("{b:02x}"));
     }
     out
 }
@@ -208,16 +215,46 @@ fn is_allowed_desktop_origin(origin: &str) -> bool {
     )
 }
 
+fn extract_path_secret(raw_request_line: &str) -> Result<(String, Option<String>), &'static str> {
+    let mut parts = raw_request_line.split(' ');
+    let method = parts.next().filter(|s| !s.is_empty()).ok_or("malformed request line")?;
+    let path = parts.next().filter(|s| !s.is_empty()).ok_or("malformed request line")?;
+    let version = parts.next().filter(|s| !s.is_empty()).ok_or("malformed request line")?;
+    if parts.next().is_some() {
+        return Err("malformed request line");
+    }
+
+    if let Some(after) = path.strip_prefix(PROXY_PATH_PREFIX) {
+        let end = after.find(['/', '?']).unwrap_or(after.len());
+        let (secret_part, rest) = after.split_at(end);
+        if !secret_part.is_empty() {
+            let clean_path = if rest.is_empty() {
+                "/".to_string()
+            } else if rest.starts_with('?') {
+                format!("/{rest}")
+            } else {
+                rest.to_string()
+            };
+            return Ok((
+                format!("{method} {clean_path} {version}"),
+                Some(secret_part.to_string()),
+            ));
+        }
+    }
+
+    Ok((raw_request_line.to_string(), None))
+}
+
 fn parse_http_head(raw_head: &str) -> Result<ParsedHead, &'static str> {
     let mut lines = raw_head.split("\r\n");
-    let request_line = lines
+    let raw_request_line = lines
         .next()
         .filter(|l| !l.is_empty())
-        .ok_or("empty request line")?
-        .to_string();
+        .ok_or("empty request line")?;
+    let (request_line, path_secret) = extract_path_secret(raw_request_line)?;
 
     let mut headers = Vec::new();
-    let mut provided_secret = None;
+    let mut provided_secret = path_secret;
     let mut target = None;
     let mut origin = None;
     let mut is_websocket = false;
@@ -265,6 +302,7 @@ fn parse_http_head(raw_head: &str) -> Result<ParsedHead, &'static str> {
     })
 }
 
+#[cfg(test)]
 fn build_forwarded_head(parsed: &ParsedHead, token: Option<&str>) -> Vec<u8> {
     build_forwarded_head_with_upstream(parsed, token, None, false)
 }
@@ -323,45 +361,52 @@ fn build_forwarded_head_with_upstream(
 }
 
 fn parse_upstream_target(raw: &str) -> Result<(String, u16, bool), String> {
-    if let Some(rest) = raw.strip_prefix("https://") {
+    let (host, port, is_tls) = if let Some(rest) = raw.strip_prefix("https://") {
         let host_port = rest.split('/').next().unwrap_or(rest);
-        let (host, port) = if let Some((h, p)) = host_port.split_once(':') {
+        if let Some((h, p)) = host_port.split_once(':') {
             (
                 h.to_string(),
                 p.parse::<u16>().map_err(|_| "invalid upstream port".to_string())?,
+                true,
             )
         } else {
-            (host_port.to_string(), 443)
-        };
-        return Ok((host, port, true));
-    }
-    if let Some(rest) = raw.strip_prefix("http://") {
+            (host_port.to_string(), 443, true)
+        }
+    } else if let Some(rest) = raw.strip_prefix("http://") {
         let host_port = rest.split('/').next().unwrap_or(rest);
-        let (host, port) = if let Some((h, p)) = host_port.split_once(':') {
+        if let Some((h, p)) = host_port.split_once(':') {
             (
                 h.to_string(),
                 p.parse::<u16>().map_err(|_| "invalid upstream port".to_string())?,
+                false,
             )
         } else {
-            (host_port.to_string(), 80)
-        };
-        return Ok((host, port, false));
-    }
-    if let Some((h, p)) = raw.split_once(':') {
+            (host_port.to_string(), 80, false)
+        }
+    } else if let Some((h, p)) = raw.split_once(':') {
         let port = p.parse::<u16>().map_err(|_| "invalid upstream port".to_string())?;
-        return Ok((h.to_string(), port, false));
+        (h.to_string(), port, false)
+    } else {
+        return Err("missing port in upstream target".to_string());
+    };
+
+    if host.is_empty() || host.contains('@') || host.chars().any(|c| c.is_whitespace()) {
+        return Err("invalid upstream host".to_string());
     }
-    Err("missing port in upstream target".to_string())
+    Ok((host, port, is_tls))
 }
 
-fn is_allowed_proxy_target(target: &str) -> bool {
-    let stripped = target
-        .strip_prefix("https://")
-        .or_else(|| target.strip_prefix("http://"))
-        .unwrap_or(target);
-    let host_port = stripped.split('/').next().unwrap_or("");
-    let host = host_port.split(':').next().unwrap_or("");
-    matches!(host, "127.0.0.1" | "localhost" | "zerovc.safiroko.xyz")
+fn is_allowed_proxy_target(target: &str, configured_upstream: Option<&str>) -> bool {
+    let Ok((t_host, t_port, t_tls)) = parse_upstream_target(target) else {
+        return false;
+    };
+    if let Some(cfg) = configured_upstream {
+        let Ok((c_host, c_port, c_tls)) = parse_upstream_target(cfg) else {
+            return false;
+        };
+        return t_host.eq_ignore_ascii_case(&c_host) && t_port == c_port && t_tls == c_tls;
+    }
+    t_host.eq_ignore_ascii_case("zerovc.safiroko.xyz") && t_port == 443 && t_tls
 }
 
 async fn forward_with_cors_headers<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
@@ -420,9 +465,12 @@ async fn forward_with_cors_headers<S: AsyncRead + AsyncWrite + Unpin + Send + 's
     let mut tmp = [0u8; 2048];
     let resp_head_end;
     loop {
-        let n = ur
-            .read(&mut tmp)
+        let n = tokio::time::timeout(PROXY_UPSTREAM_HEAD_TIMEOUT, ur.read(&mut tmp))
             .await
+            .map_err(|_| {
+                c2u.abort();
+                "upstream response header timeout".to_string()
+            })?
             .map_err(|e| {
                 c2u.abort();
                 format!("upstream read error: {e}")
@@ -510,28 +558,29 @@ async fn handle_proxy_connection(
 ) -> Result<(), String> {
     let mut buf = Vec::with_capacity(4096);
     let mut tmp = [0u8; 2048];
-    let head_end;
-
-    loop {
-        let n = client
-            .read(&mut tmp)
-            .await
-            .map_err(|e| format!("client read error: {e}"))?;
-        if n == 0 {
-            return Err("client closed before headers".into());
+    let head_end = tokio::time::timeout(PROXY_HEAD_TIMEOUT, async {
+        loop {
+            let n = client
+                .read(&mut tmp)
+                .await
+                .map_err(|e| format!("client read error: {e}"))?;
+            if n == 0 {
+                return Err("client closed before headers".to_string());
+            }
+            buf.extend_from_slice(&tmp[..n]);
+            if let Some(pos) = find_double_crlf(&buf) {
+                return Ok(pos);
+            }
+            if buf.len() > MAX_HEADER_BYTES {
+                let _ = client
+                    .write_all(b"HTTP/1.1 431 Request Header Fields Too Large\r\nConnection: close\r\n\r\n")
+                    .await;
+                return Err("headers too large".to_string());
+            }
         }
-        buf.extend_from_slice(&tmp[..n]);
-        if let Some(pos) = find_double_crlf(&buf) {
-            head_end = pos;
-            break;
-        }
-        if buf.len() > MAX_HEADER_BYTES {
-            let _ = client
-                .write_all(b"HTTP/1.1 431 Request Header Fields Too Large\r\nConnection: close\r\n\r\n")
-                .await;
-            return Err("headers too large".into());
-        }
-    }
+    })
+    .await
+    .map_err(|_| "client header read timeout".to_string())??;
 
     let head_str = std::str::from_utf8(&buf[..head_end]).map_err(|_| "invalid utf8 headers")?;
     let parsed = parse_http_head(head_str).map_err(|e| e.to_string())?;
@@ -541,21 +590,25 @@ async fn handle_proxy_connection(
         .as_deref()
         .map(|s| constant_time_eq(s.as_bytes(), expected_secret.as_bytes()))
         .unwrap_or(false);
-    let valid_origin = parsed
-        .origin
-        .as_deref()
-        .map(is_allowed_desktop_origin)
-        .unwrap_or(false);
 
-    if !valid_secret && !valid_origin {
+    if !valid_secret {
         let _ = client
             .write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: close\r\n\r\nForbidden")
             .await;
-        return Err("invalid proxy secret or origin".into());
+        return Err("invalid or missing proxy secret".into());
     }
 
     if parsed.request_line.starts_with("OPTIONS ") {
-        let allow_origin = parsed.origin.as_deref().unwrap_or("*");
+        let Some(allow_origin) = parsed
+            .origin
+            .as_deref()
+            .filter(|o| is_allowed_desktop_origin(o))
+        else {
+            let _ = client
+                .write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: close\r\n\r\nForbidden")
+                .await;
+            return Err("disallowed origin for CORS preflight".into());
+        };
         let resp = format!(
             "HTTP/1.1 204 No Content\r\n\
              Access-Control-Allow-Origin: {allow_origin}\r\n\
@@ -576,7 +629,7 @@ async fn handle_proxy_connection(
         .or(default_upstream)
         .ok_or_else(|| "missing upstream target".to_string())?;
 
-    if !is_allowed_proxy_target(upstream_raw) {
+    if !is_allowed_proxy_target(upstream_raw, default_upstream) {
         let _ = client
             .write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 14\r\nConnection: close\r\n\r\nInvalid target")
             .await;
@@ -606,8 +659,9 @@ async fn handle_proxy_connection(
     let t_start = std::time::Instant::now();
     let req_line = parsed.request_line.clone();
     let is_ws = parsed.is_websocket;
-    let tcp = TcpStream::connect((host.as_str(), port))
+    let tcp = tokio::time::timeout(PROXY_CONNECT_TIMEOUT, TcpStream::connect((host.as_str(), port)))
         .await
+        .map_err(|_| "upstream connect timeout".to_string())?
         .map_err(|e| format!("upstream connect failed: {e}"))?;
     let t_tcp = t_start.elapsed().as_millis();
 
@@ -616,10 +670,13 @@ async fn handle_proxy_connection(
         let connector = TlsConnector::from(tls_cfg);
         let server_name = ServerName::try_from(host)
             .map_err(|_| "invalid TLS server name".to_string())?;
-        let tls_stream = connector
-            .connect(server_name, tcp)
-            .await
-            .map_err(|e| format!("TLS handshake failed: {e}"))?;
+        let tls_stream = tokio::time::timeout(
+            PROXY_CONNECT_TIMEOUT,
+            connector.connect(server_name, tcp),
+        )
+        .await
+        .map_err(|_| "TLS handshake timeout".to_string())?
+        .map_err(|e| format!("TLS handshake failed: {e}"))?;
         let t_tls = t_start.elapsed().as_millis();
         let r = forward_with_cors_headers(
             client,
@@ -772,12 +829,11 @@ mod tests {
             .unwrap();
 
         let mut client = TcpStream::connect(proxy_addr).await.unwrap();
-        client
-            .write_all(
-                b"POST /api/auth/desktop-exchange HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://localhost:5173\r\nContent-Type: application/json\r\nContent-Length: 14\r\n\r\n",
-            )
-            .await
-            .unwrap();
+        let head = format!(
+            "POST /api/auth/desktop-exchange HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: http://localhost:5173\r\nX-ZeroVC-Proxy-Secret: {}\r\nContent-Type: application/json\r\nContent-Length: 14\r\n\r\n",
+            vault.proxy_secret()
+        );
+        client.write_all(head.as_bytes()).await.unwrap();
         client.flush().await.unwrap();
 
         // Simulate WebKitGTK sending POST body in a second TCP packet without closing write half
@@ -795,5 +851,129 @@ mod tests {
         .unwrap();
         assert!(resp.contains("POST_OK"), "got: {resp}");
         assert!(resp.contains("Connection: close"), "got: {resp}");
+    }
+
+    #[tokio::test]
+    async fn test_spoofed_origin_without_secret_is_rejected() {
+        let mock_upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let upstream_addr = mock_upstream.local_addr().unwrap();
+
+        let vault = AuthVault {
+            token: Arc::new(RwLock::new(Some("secret-jwt-token".to_string()))),
+            proxy_secret: Arc::new("session-secret-test".to_string()),
+            proxy_addr: Arc::new(RwLock::new(None)),
+        };
+        let proxy_addr = vault
+            .start_proxy_with_default(Some(upstream_addr.to_string()))
+            .await
+            .unwrap();
+
+        for spoofed_origin in ["http://tauri.localhost", "http://localhost:5173", "https://zerovc.safiroko.xyz"] {
+            let mut client = TcpStream::connect(proxy_addr).await.unwrap();
+            let req = format!(
+                "GET /api/me HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: {spoofed_origin}\r\n\r\n"
+            );
+            client.write_all(req.as_bytes()).await.unwrap();
+            let mut resp = String::new();
+            client.read_to_string(&mut resp).await.unwrap();
+            assert!(
+                resp.starts_with("HTTP/1.1 403 Forbidden"),
+                "expected 403 for spoofed Origin {spoofed_origin}, got: {resp}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_disallowed_loopback_target_is_rejected() {
+        assert!(is_allowed_proxy_target(
+            "https://zerovc.safiroko.xyz",
+            Some("https://zerovc.safiroko.xyz")
+        ));
+        assert!(!is_allowed_proxy_target(
+            "127.0.0.1:8080",
+            Some("https://zerovc.safiroko.xyz")
+        ));
+        assert!(!is_allowed_proxy_target(
+            "http://localhost:5173",
+            Some("https://zerovc.safiroko.xyz")
+        ));
+        assert!(!is_allowed_proxy_target(
+            "https://zerovc.safiroko.xyz@127.0.0.1:8080",
+            Some("https://zerovc.safiroko.xyz")
+        ));
+
+        let vault = AuthVault {
+            token: Arc::new(RwLock::new(Some("secret-jwt-token".to_string()))),
+            proxy_secret: Arc::new("session-secret-test".to_string()),
+            proxy_addr: Arc::new(RwLock::new(None)),
+        };
+        let proxy_addr = vault
+            .start_proxy_with_default(Some("https://zerovc.safiroko.xyz".to_string()))
+            .await
+            .unwrap();
+
+        let mut client = TcpStream::connect(proxy_addr).await.unwrap();
+        let req = format!(
+            "GET /api/me HTTP/1.1\r\nHost: 127.0.0.1\r\nX-ZeroVC-Proxy-Secret: {}\r\nX-ZeroVC-Target: 127.0.0.1:9999\r\n\r\n",
+            vault.proxy_secret()
+        );
+        client.write_all(req.as_bytes()).await.unwrap();
+        let mut resp = String::new();
+        client.read_to_string(&mut resp).await.unwrap();
+        assert!(
+            resp.starts_with("HTTP/1.1 403 Forbidden"),
+            "expected 403 for arbitrary loopback target, got: {resp}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_path_prefix_secret_strips_prefix_and_injects_jwt() {
+        let mock_upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let upstream_addr = mock_upstream.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            if let Ok((mut sock, _)) = mock_upstream.accept().await {
+                let mut req_buf = [0u8; 2048];
+                let n = sock.read(&mut req_buf).await.unwrap_or(0);
+                let req_text = String::from_utf8_lossy(&req_buf[..n]).to_string();
+                let ok = req_text.starts_with("GET /api/me?foo=1 HTTP/1.1\r\n")
+                    && req_text.contains("Authorization: Bearer jwt-via-path\r\n")
+                    && !req_text.contains("__zv_proxy");
+                let body = if ok { "PATH_OK" } else { "BAD_PATH" };
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = sock.write_all(resp.as_bytes()).await;
+            }
+        });
+
+        let vault = AuthVault {
+            token: Arc::new(RwLock::new(Some("jwt-via-path".to_string()))),
+            proxy_secret: Arc::new("path-secret-xyz".to_string()),
+            proxy_addr: Arc::new(RwLock::new(None)),
+        };
+        vault
+            .start_proxy_with_default(Some(upstream_addr.to_string()))
+            .await
+            .unwrap();
+        let proxy_url = vault.proxy_url().await.unwrap();
+        let addr_port = proxy_url
+            .strip_prefix("http://")
+            .unwrap()
+            .split('/')
+            .next()
+            .unwrap();
+
+        let mut client = TcpStream::connect(addr_port).await.unwrap();
+        let req = format!(
+            "GET /__zv_proxy/{}/api/me?foo=1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
+            vault.proxy_secret()
+        );
+        client.write_all(req.as_bytes()).await.unwrap();
+        let mut resp = String::new();
+        client.read_to_string(&mut resp).await.unwrap();
+        assert!(resp.contains("PATH_OK"), "got: {resp}");
     }
 }

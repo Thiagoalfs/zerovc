@@ -313,6 +313,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         if (participant.identity.startsWith('screenshare:')) return;
         const deviceId = extractParticipantDeviceId(participant);
         participantDeviceMap.set(participant.identity, deviceId);
+        callKeyManager.registerDeviceUser(deviceId, participant.identity);
         callKeyManager.handleParticipantJoined(deviceId);
       },
       onParticipantDisconnected: (participant) => {
@@ -391,6 +392,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           if (participant.identity.startsWith('screenshare:')) continue;
           const devId = extractParticipantDeviceId(participant);
           participantDeviceMap.set(participant.identity, devId);
+          callKeyManager.registerDeviceUser(devId, participant.identity);
           existingDeviceIds.push(devId);
         }
       }

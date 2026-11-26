@@ -13,7 +13,7 @@
  *   npx tsx scripts/test-channels-m5.ts
  */
 
-import { GroupSession, InboundGroupSession } from '@kinsh/vodozemac-wasm';
+import { Account, GroupSession, InboundGroupSession } from '@kinsh/vodozemac-wasm';
 import { MegolmManager } from '../src/crypto/megolmSession';
 import { MessageCodec } from '../src/messaging/messageCodec';
 import { useGuildStore } from '../src/stores/guildStore';
@@ -417,11 +417,27 @@ async function runM5VerificationSuite() {
     const epoch = 1;
     const senderDeviceId = 'dev-alice-laptop';
 
-    // Create audience
+    // Create real Olm accounts for Alice (sender) and Bob (recipient)
+    const bobAccount = new Account();
+    bobAccount.generateOneTimeKeys(2);
+    const bobKeys = JSON.parse(bobAccount.identityKeys());
+    const bobOtks = JSON.parse(bobAccount.oneTimeKeys()).curve25519;
+    const bobOtkId = Object.keys(bobOtks)[0];
+    const bobOtk = bobOtks[bobOtkId];
+    bobAccount.markKeysAsPublished();
+
     const bobDeviceId = 'dev-bob-phone';
+    (api.e2ee as any).claimOTKs = async (deviceIds: string[]) => ({
+      claimed_keys: Object.fromEntries(
+        deviceIds
+          .filter((id) => id === bobDeviceId)
+          .map((id) => [id, { key_id: bobOtkId, public_key: bobOtk, is_fallback: false }])
+      ),
+    });
+
     const rosterDevices = [
       { user_id: 'alice-id', device_id: senderDeviceId, curve25519_key: 'curvA', ed25519_key: 'edA' },
-      { user_id: 'bob-id', device_id: bobDeviceId, curve25519_key: 'curvB', ed25519_key: 'edB' },
+      { user_id: 'bob-id', device_id: bobDeviceId, curve25519_key: bobKeys.curve25519, ed25519_key: bobKeys.ed25519 },
     ];
 
     let ciphertextGenerated = '';
@@ -429,7 +445,7 @@ async function runM5VerificationSuite() {
     let outboundSessionKey = '';
     let outboundSessionId = '';
 
-    await test('Encode channel message: generates Megolm ciphertext and distributes room key', async () => {
+    await test('Encode channel message: generates Megolm ciphertext and distributes Olm-encrypted room key', async () => {
       const encodeRes = await codec.encodeMessage({
         conversationId: channelId,
         conversationType: 'channel',
@@ -453,12 +469,16 @@ async function runM5VerificationSuite() {
       metaGenerated = encodeRes.e2ee_meta;
       outboundSessionId = encodeRes.e2ee_meta.session_id;
 
-      // Ensure room key distribution to-device message was queued
+      // Ensure room key distribution to-device message was queued and Olm-encrypted
       const roomKeyMsg = capturedToDevice.find((m) => m.msg_type === 'room_key');
       assert(Boolean(roomKeyMsg), 'Must queue room key to-device message');
       assertEqual(roomKeyMsg.recipient_device_id, bobDeviceId, 'Must send to Bob device');
 
-      const payload = JSON.parse(roomKeyMsg.payload);
+      const olmWrapper = JSON.parse(roomKeyMsg.payload);
+      assertEqual(olmWrapper.olm_v, 1, 'room_key must be Olm-encrypted (olm_v === 1)');
+      assert(!('session_key' in olmWrapper), 'Plaintext session_key must NOT appear on wire');
+      const decrypted = bobAccount.createInboundSession(olmWrapper.body);
+      const payload = JSON.parse(decrypted.plaintext);
       assertEqual(payload.session_id, outboundSessionId, 'Room key session ID matches outbound session');
       outboundSessionKey = payload.session_key;
     });

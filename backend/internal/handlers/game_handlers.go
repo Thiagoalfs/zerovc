@@ -121,23 +121,25 @@ func (h *GameHandler) SearchGames(w http.ResponseWriter, r *http.Request) {
 	steamReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://steamcommunity.com/actions/SearchApps/"+url.PathEscape(query), nil)
 	if err == nil {
 		steamReq.Header.Set("User-Agent", "ZeroVC-App/1.0 (+https://zerovc.safiroko.xyz)")
-		if sResp, sErr := h.client.Do(steamReq); sErr == nil && sResp.StatusCode == http.StatusOK {
+		if sResp, sErr := h.client.Do(steamReq); sErr == nil {
 			defer sResp.Body.Close()
-			var sItems []steamSearchItem
-			if body, rErr := io.ReadAll(io.LimitReader(sResp.Body, 256*1024)); rErr == nil {
-				if err := json.Unmarshal(body, &sItems); err == nil {
-					for idx, item := range sItems {
-						if item.Name != "" && item.Icon != "" {
-							cleanName := strings.ToLower(strings.TrimSpace(item.Name))
-							steamMatches[cleanName] = item.Icon
-							if idx < 10 {
-								steamResults = append(steamResults, GameSearchResult{
-									ID:              1000000 + idx,
-									Name:            item.Name,
-									Slug:            strings.ReplaceAll(cleanName, " ", "-"),
-									BackgroundImage: item.Logo,
-									IconURL:         item.Icon,
-								})
+			if sResp.StatusCode == http.StatusOK {
+				var sItems []steamSearchItem
+				if body, rErr := io.ReadAll(io.LimitReader(sResp.Body, 256*1024)); rErr == nil {
+					if err := json.Unmarshal(body, &sItems); err == nil {
+						for idx, item := range sItems {
+							if item.Name != "" && item.Icon != "" {
+								cleanName := strings.ToLower(strings.TrimSpace(item.Name))
+								steamMatches[cleanName] = item.Icon
+								if idx < 10 {
+									steamResults = append(steamResults, GameSearchResult{
+										ID:              1000000 + idx,
+										Name:            item.Name,
+										Slug:            strings.ReplaceAll(cleanName, " ", "-"),
+										BackgroundImage: item.Logo,
+										IconURL:         item.Icon,
+									})
+								}
 							}
 						}
 					}
@@ -174,54 +176,56 @@ func (h *GameHandler) SearchGames(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			req.Header.Set("User-Agent", "ZeroVC-App/1.0 (+https://zerovc.safiroko.xyz)")
 			resp, err := h.client.Do(req)
-			if err == nil && resp.StatusCode == http.StatusOK {
+			if err == nil {
 				defer resp.Body.Close()
-				bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
-				if err == nil {
-					var rawgResp rawgSearchResponse
-					if err := json.Unmarshal(bodyBytes, &rawgResp); err == nil {
-						for _, item := range rawgResp.Results {
-							var genres []string
-							for _, g := range item.Genres {
-								if g.Name != "" {
-									genres = append(genres, g.Name)
+				if resp.StatusCode == http.StatusOK {
+					bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+					if err == nil {
+						var rawgResp rawgSearchResponse
+						if err := json.Unmarshal(bodyBytes, &rawgResp); err == nil {
+							for _, item := range rawgResp.Results {
+								var genres []string
+								for _, g := range item.Genres {
+									if g.Name != "" {
+										genres = append(genres, g.Name)
+									}
 								}
-							}
 
-							var platforms []string
-							for _, p := range item.Platforms {
-								if p.Platform.Name != "" {
-									platforms = append(platforms, p.Platform.Name)
+								var platforms []string
+								for _, p := range item.Platforms {
+									if p.Platform.Name != "" {
+										platforms = append(platforms, p.Platform.Name)
+									}
 								}
-							}
 
-							// Resolve square icon dynamically from Steam match if available, fallback to RAWG background
-							resolvedIcon := findSteamIcon(item.Name, steamMatches)
-							if resolvedIcon == "" {
-								resolvedIcon = item.BackgroundImage
-							}
-
-							// Check if already in results
-							exists := false
-							for _, existing := range results {
-								if strings.EqualFold(existing.Name, item.Name) {
-									exists = true
-									break
+								// Resolve square icon dynamically from Steam match if available, fallback to RAWG background
+								resolvedIcon := findSteamIcon(item.Name, steamMatches)
+								if resolvedIcon == "" {
+									resolvedIcon = item.BackgroundImage
 								}
-							}
 
-							if !exists {
-								results = append(results, GameSearchResult{
-									ID:              item.ID,
-									Name:            item.Name,
-									Slug:            item.Slug,
-									BackgroundImage: item.BackgroundImage,
-									IconURL:         resolvedIcon,
-									Genres:          genres,
-									Platforms:       platforms,
-									Released:        item.Released,
-									Rating:          item.Rating,
-								})
+								// Check if already in results
+								exists := false
+								for _, existing := range results {
+									if strings.EqualFold(existing.Name, item.Name) {
+										exists = true
+										break
+									}
+								}
+
+								if !exists {
+									results = append(results, GameSearchResult{
+										ID:              item.ID,
+										Name:            item.Name,
+										Slug:            item.Slug,
+										BackgroundImage: item.BackgroundImage,
+										IconURL:         resolvedIcon,
+										Genres:          genres,
+										Platforms:       platforms,
+										Released:        item.Released,
+										Rating:          item.Rating,
+									})
+								}
 							}
 						}
 					}
@@ -235,19 +239,35 @@ func (h *GameHandler) SearchGames(w http.ResponseWriter, r *http.Request) {
 		results = steamResults
 	}
 
-	// 6. Save in cache (24 hours TTL, limit cache to 1000 items)
+	// 6. Save in cache (24 hours TTL, hard cap at 1000 items)
+	now := time.Now()
 	h.mu.Lock()
-	if len(h.cache) > 1000 {
-		now := time.Now()
+	if _, exists := h.cache[normQuery]; !exists && len(h.cache) >= 1000 {
 		for k, v := range h.cache {
 			if now.After(v.expiresAt) {
 				delete(h.cache, k)
 			}
 		}
+		for len(h.cache) >= 1000 {
+			var oldestKey string
+			var oldestExp time.Time
+			first := true
+			for k, v := range h.cache {
+				if first || v.expiresAt.Before(oldestExp) {
+					oldestKey = k
+					oldestExp = v.expiresAt
+					first = false
+				}
+			}
+			if first {
+				break
+			}
+			delete(h.cache, oldestKey)
+		}
 	}
 	h.cache[normQuery] = cachedGameSearch{
 		results:   results,
-		expiresAt: time.Now().Add(24 * time.Hour),
+		expiresAt: now.Add(24 * time.Hour),
 	}
 	h.mu.Unlock()
 

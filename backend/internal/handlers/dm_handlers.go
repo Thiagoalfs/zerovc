@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -17,17 +18,26 @@ import (
 	"github.com/zerovc/zerovc/backend/internal/voice"
 )
 
+type dmCallInvite struct {
+	callerID    uuid.UUID
+	recipientID uuid.UUID
+	expiresAt   time.Time
+}
+
 type DMHandler struct {
-	db      *database.DB
-	hub     *gateway.Hub
-	livekit *voice.LiveKitService
+	db            *database.DB
+	hub           *gateway.Hub
+	livekit       *voice.LiveKitService
+	callInvitesMu sync.Mutex
+	callInvites   map[uuid.UUID]dmCallInvite
 }
 
 func NewDMHandler(db *database.DB, hub *gateway.Hub, livekit *voice.LiveKitService) *DMHandler {
 	return &DMHandler{
-		db:      db,
-		hub:     hub,
-		livekit: livekit,
+		db:          db,
+		hub:         hub,
+		livekit:     livekit,
+		callInvites: make(map[uuid.UUID]dmCallInvite),
 	}
 }
 
@@ -959,6 +969,32 @@ func (h *DMHandler) InviteCall(w http.ResponseWriter, r *http.Request) {
 		&caller.ID, &caller.Username, &caller.DisplayName, &caller.AvatarURL, &caller.BannerURL, &caller.Bio, &caller.Status, &caller.CustomStatus,
 	)
 
+	// Record active call invite (with bounded map size & expiry)
+	now := time.Now()
+	h.callInvitesMu.Lock()
+	if h.callInvites == nil {
+		h.callInvites = make(map[uuid.UUID]dmCallInvite)
+	}
+	for id, inv := range h.callInvites {
+		if now.After(inv.expiresAt) {
+			delete(h.callInvites, id)
+		}
+	}
+	if len(h.callInvites) >= 2000 {
+		for id := range h.callInvites {
+			delete(h.callInvites, id)
+			if len(h.callInvites) < 2000 {
+				break
+			}
+		}
+	}
+	h.callInvites[roomID] = dmCallInvite{
+		callerID:    userID,
+		recipientID: recipientID,
+		expiresAt:   now.Add(2 * time.Minute),
+	}
+	h.callInvitesMu.Unlock()
+
 	// Send CALL_INCOMING event to recipient
 	h.hub.SendToUser(recipientID, models.WSEvent{
 		Type: "CALL_INCOMING",
@@ -1003,6 +1039,25 @@ func (h *DMHandler) AcceptCall(w http.ResponseWriter, r *http.Request) {
 	otherUserID := user1ID
 	if otherUserID == userID {
 		otherUserID = user2ID
+	}
+
+	var isBlocked bool
+	blockCheckQuery := `SELECT EXISTS(SELECT 1 FROM user_blocks WHERE (user_id = $1 AND blocked_user_id = $2) OR (user_id = $2 AND blocked_user_id = $1))`
+	if err := h.db.Pool.QueryRow(r.Context(), blockCheckQuery, userID, otherUserID).Scan(&isBlocked); err == nil && isBlocked {
+		http.Error(w, `{"error":"não é possível aceitar chamada com este usuário"}`, http.StatusForbidden)
+		return
+	}
+
+	now := time.Now()
+	h.callInvitesMu.Lock()
+	inv, hasInvite := h.callInvites[roomID]
+	if hasInvite {
+		delete(h.callInvites, roomID)
+	}
+	h.callInvitesMu.Unlock()
+	if !hasInvite || now.After(inv.expiresAt) || inv.recipientID != userID || inv.callerID != otherUserID {
+		http.Error(w, `{"error":"nenhum convite de chamada ativo encontrado"}`, http.StatusForbidden)
+		return
 	}
 
 	// Fetch user details for token generation
@@ -1096,6 +1151,10 @@ func (h *DMHandler) RejectCall(w http.ResponseWriter, r *http.Request) {
 		otherUserID = user2ID
 	}
 
+	h.callInvitesMu.Lock()
+	delete(h.callInvites, roomID)
+	h.callInvitesMu.Unlock()
+
 	h.hub.SendToUser(otherUserID, models.WSEvent{
 		Type: "CALL_REJECT",
 		Data: map[string]any{
@@ -1134,6 +1193,10 @@ func (h *DMHandler) LeaveCall(w http.ResponseWriter, r *http.Request) {
 		otherUserID = user2ID
 	}
 
+	h.callInvitesMu.Lock()
+	delete(h.callInvites, roomID)
+	h.callInvitesMu.Unlock()
+
 	h.hub.SendToUser(otherUserID, models.WSEvent{
 		Type: "CALL_LEAVE",
 		Data: map[string]any{
@@ -1168,7 +1231,7 @@ func (h *DMHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT m.id, m.dm_room_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, m.created_at,
+		SELECT m.id, m.dm_room_id, m.author_id, m.content, m.attachments, m.reply_to_id, m.is_pinned, m.is_edited, m.is_tts, m.edited_at, COALESCE(m.encrypted, false), m.e2ee_ciphertext, m.e2ee_meta, m.created_at,
 		       u.username, u.display_name, u.avatar_url, u.banner_url, u.bio, u.status, u.custom_status,
 		       rm.id, rm.content, ru.id, ru.username, ru.display_name, ru.avatar_url
 		FROM dm_messages m
@@ -1197,7 +1260,7 @@ func (h *DMHandler) ListPinned(w http.ResponseWriter, r *http.Request) {
 		var rContent, ruUsername, ruDisplayName, ruAvatar *string
 
 		if err := rows.Scan(
-			&m.ID, &m.DMRoomID, &m.AuthorID, &m.Content, &attachmentsJSON, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.IsTTS, &m.EditedAt, &m.CreatedAt,
+			&m.ID, &m.DMRoomID, &m.AuthorID, &m.Content, &attachmentsJSON, &m.ReplyToID, &m.IsPinned, &m.IsEdited, &m.IsTTS, &m.EditedAt, &m.Encrypted, &m.E2EECiphertext, &m.E2EEMeta, &m.CreatedAt,
 			&author.Username, &author.DisplayName, &author.AvatarURL, &author.BannerURL, &author.Bio, &author.Status, &author.CustomStatus,
 			&rID, &rContent, &ruID, &ruUsername, &ruDisplayName, &ruAvatar,
 		); err != nil {

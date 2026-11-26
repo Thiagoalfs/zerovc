@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: http://127.0.0.1:* blob: data:; media-src 'self' https: http://127.0.0.1:* blob: data:; font-src 'self' https: data:; connect-src 'self' https://zerovc.safiroko.xyz wss://zerovc.safiroko.xyz https://*.safiroko.xyz wss://*.safiroko.xyz https://*.livekit.cloud wss://*.livekit.cloud http://127.0.0.1:* ws://127.0.0.1:*; frame-src 'self' https://challenges.cloudflare.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'"
     }
   },
   "plugins": {
@@ -46,9 +46,6 @@
     "icon": [
       "icons/icon.ico",
       "icons/icon.png"
-    ],
-    "resources": [
-      "../native/bin/*"
     ],
     "windows": {
       "nsis": {

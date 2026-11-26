@@ -65,6 +65,12 @@ impl AudioCaptureState {
     }
 }
 
+impl Drop for AudioCaptureState {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
 pub fn build_wasapi_args(self_pid: u32, options: Option<&AudioCaptureOptions>) -> Vec<String> {
     let mut args = vec!["--zerovc-pid".to_string(), self_pid.to_string()];
     if let Some(opts) = options {
@@ -345,7 +351,7 @@ async fn start_linux_pipewire_capture(
         .args(record_args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::null())
         .spawn()
     {
         Ok(c) => c,
@@ -447,7 +453,6 @@ async fn sync_linux_pipewire_links() -> Result<(), String> {
     };
 
     let own_pid = std::process::id() as u64;
-    let mut allowed_out_ports = std::collections::HashSet::new();
 
     let mut existing_links = std::collections::HashSet::new();
     for o in &dump {
@@ -461,6 +466,7 @@ async fn sync_linux_pipewire_links() -> Result<(), String> {
         }
     }
 
+    let mut allowed_node_ids = std::collections::HashSet::new();
     for o in &dump {
         if o.get("type").and_then(|v| v.as_str()) != Some("PipeWire:Interface:Node") {
             continue;
@@ -494,43 +500,48 @@ async fn sync_linux_pipewire_links() -> Result<(), String> {
             continue;
         }
 
-        let Some(node_id) = o.get("id").and_then(|v| v.as_u64()) else {
+        if let Some(node_id) = o.get("id").and_then(|v| v.as_u64()) {
+            allowed_node_ids.insert(node_id);
+        }
+    }
+
+    let mut allowed_out_ports = std::collections::HashSet::new();
+    for port in &dump {
+        if port.get("type").and_then(|v| v.as_str()) != Some("PipeWire:Interface:Port") {
+            continue;
+        }
+        if port.pointer("/info/direction").and_then(|v| v.as_str()) != Some("output") {
+            continue;
+        }
+        let Some(node_id) = port.pointer("/info/props/node.id").and_then(|v| v.as_u64()) else {
             continue;
         };
-
-        for port in &dump {
-            if port.get("type").and_then(|v| v.as_str()) != Some("PipeWire:Interface:Port") {
-                continue;
+        if !allowed_node_ids.contains(&node_id) {
+            continue;
+        }
+        let Some(port_id) = port.get("id").and_then(|v| v.as_u64()) else {
+            continue;
+        };
+        let ch = port
+            .pointer("/info/props/audio.channel")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if ch == "FL" || ch == "MONO" {
+            allowed_out_ports.insert(port_id);
+            if !existing_links.contains(&(port_id, fl_id)) {
+                let _ = Command::new("pw-link")
+                    .args([port_id.to_string(), fl_id.to_string()])
+                    .status()
+                    .await;
             }
-            if port.pointer("/info/props/node.id").and_then(|v| v.as_u64()) != Some(node_id)
-                || port.pointer("/info/direction").and_then(|v| v.as_str()) != Some("output")
-            {
-                continue;
-            }
-            let Some(port_id) = port.get("id").and_then(|v| v.as_u64()) else {
-                continue;
-            };
-            let ch = port
-                .pointer("/info/props/audio.channel")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            if ch == "FL" || ch == "MONO" {
-                allowed_out_ports.insert(port_id);
-                if !existing_links.contains(&(port_id, fl_id)) {
-                    let _ = Command::new("pw-link")
-                        .args([port_id.to_string(), fl_id.to_string()])
-                        .status()
-                        .await;
-                }
-            }
-            if ch == "FR" || ch == "MONO" {
-                allowed_out_ports.insert(port_id);
-                if !existing_links.contains(&(port_id, fr_id)) {
-                    let _ = Command::new("pw-link")
-                        .args([port_id.to_string(), fr_id.to_string()])
-                        .status()
-                        .await;
-                }
+        }
+        if ch == "FR" || ch == "MONO" {
+            allowed_out_ports.insert(port_id);
+            if !existing_links.contains(&(port_id, fr_id)) {
+                let _ = Command::new("pw-link")
+                    .args([port_id.to_string(), fr_id.to_string()])
+                    .status()
+                    .await;
             }
         }
     }

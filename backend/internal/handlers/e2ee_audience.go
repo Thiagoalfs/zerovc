@@ -427,6 +427,21 @@ func (h *E2EEHandler) GetChannelAudience(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if h.db == nil || h.db.Pool == nil {
+		http.Error(w, `{"error":"internal_error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	var guildID uuid.UUID
+	if err := h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID); err != nil {
+		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
+		return
+	}
+	if canAccess, accessErr := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID); accessErr != nil || !canAccess {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+
 	resp, err := h.RecomputeAudience(r.Context(), channelID)
 
 	var limitErr *AudienceLimitExceededError
@@ -499,35 +514,24 @@ func (h *E2EEHandler) EnableChannelE2EE(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Verify caller has PermManageChannels or is owner/admin
+	// Verify caller can access the channel and has PermManageChannels (respecting overwrites)
 	var guildID uuid.UUID
-	var ownerID uuid.UUID
-	var audienceLimit int
-	err = h.db.Pool.QueryRow(r.Context(), `
-		SELECT c.guild_id, g.owner_id, COALESCE(c.audience_limit, 15)
-		FROM channels c
-		INNER JOIN guilds g ON g.id = c.guild_id
-		WHERE c.id = $1
-	`, channelID).Scan(&guildID, &ownerID, &audienceLimit)
+	err = h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", channelID).Scan(&guildID)
 	if err != nil {
 		http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
 		return
 	}
 
-	if userID != ownerID {
-		var perms int64
-		_ = h.db.Pool.QueryRow(r.Context(), `
-			SELECT COALESCE(BIT_OR(gr.permissions), 0)
-			FROM guild_members gm
-			JOIN guild_member_roles gmr ON gmr.guild_id = gm.guild_id AND gmr.user_id = gm.user_id
-			JOIN guild_roles gr ON gr.id = gmr.role_id
-			WHERE gm.guild_id = $1 AND gm.user_id = $2
-		`, guildID, userID).Scan(&perms)
+	canAccess, accessErr := canUserAccessChannel(r.Context(), h.db, guildID, channelID, userID)
+	if accessErr != nil || !canAccess {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
 
-		if (perms&models.PermAdministrator) == 0 && (perms&models.PermManageChannels) == 0 {
-			http.Error(w, `{"error":"forbidden: manage_channels permission required"}`, http.StatusForbidden)
-			return
-		}
+	canManage, manageErr := canUserManageChannel(r.Context(), h.db, guildID, channelID, userID)
+	if manageErr != nil || !canManage {
+		http.Error(w, `{"error":"forbidden: manage_channels permission required"}`, http.StatusForbidden)
+		return
 	}
 
 	// Compute audience to check limit

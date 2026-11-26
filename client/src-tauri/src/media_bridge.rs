@@ -86,7 +86,7 @@ struct ActiveSession {
     camera: Option<CameraController>,
     camera_pub_sid: Option<TrackSid>,
     video_hub: Arc<VideoFrameHub>,
-    event_task: tokio::task::JoinHandle<()>,
+    event_task: Option<tokio::task::JoinHandle<()>>,
     audio_config: AudioInputConfig,
     input_device_id: Option<String>,
     output_device_id: Option<String>,
@@ -177,233 +177,44 @@ impl MediaBridge {
                 1,
                 200,
             );
-            let track = LocalAudioTrack::create_audio_track(
-                "microphone",
-                RtcAudioSource::Native(src.clone()),
-            );
-            let mut pub_opts = TrackPublishOptions::default();
-            pub_opts.source = TrackSource::Microphone;
-            match room
-                .local_participant()
-                .publish_track(LocalTrack::Audio(track), pub_opts)
-                .await
-            {
-                Ok(publication) => {
-                    mic_pub_sid = Some(publication.sid());
-                    let vad_app = app.clone();
-                    match AudioInputController::start(
-                        src.clone(),
-                        input_device_id.clone(),
-                        audio_config.clone(),
-                        move |vad| {
-                            let _ = vad_app.emit("media-bridge:vad-state", vad);
-                        },
-                    ) {
-                        Ok(ctrl) => {
+            let vad_app = app.clone();
+            match AudioInputController::start(
+                src.clone(),
+                input_device_id.clone(),
+                audio_config.clone(),
+                move |vad| {
+                    let _ = vad_app.emit("media-bridge:vad-state", vad);
+                },
+            ) {
+                Ok(ctrl) => {
+                    let track = LocalAudioTrack::create_audio_track(
+                        "microphone",
+                        RtcAudioSource::Native(src.clone()),
+                    );
+                    let mut pub_opts = TrackPublishOptions::default();
+                    pub_opts.source = TrackSource::Microphone;
+                    match room
+                        .local_participant()
+                        .publish_track(LocalTrack::Audio(track), pub_opts)
+                        .await
+                    {
+                        Ok(publication) => {
+                            mic_pub_sid = Some(publication.sid());
                             audio_in = Some(ctrl);
                             audio_source = Some(src);
                         }
-                        Err(e) => eprintln!("[MediaBridge] AudioInputController start failed: {e}"),
+                        Err(e) => {
+                            ctrl.stop();
+                            eprintln!("[MediaBridge] Failed to publish microphone track: {e}");
+                        }
                     }
                 }
-                Err(e) => eprintln!("[MediaBridge] Failed to publish microphone track: {e}"),
+                Err(e) => eprintln!("[MediaBridge] AudioInputController start failed: {e}"),
             }
         }
 
-        let inner_arc = Arc::clone(&self.inner);
-        let app_clone = app.clone();
-        let room_clone = Arc::clone(&room);
-        let local_id_clone = local_identity.clone();
-
-        let event_task = tokio::spawn(async move {
-            while let Some(event) = events.recv().await {
-                match event {
-                    RoomEvent::ParticipantConnected(participant) => {
-                        let pid = participant.identity().to_string();
-                        let should_send_deafen = {
-                            let guard = inner_arc.lock().await;
-                            guard
-                                .as_ref()
-                                .map(|s| s.is_deafened && !pid.starts_with("screenshare:"))
-                                .unwrap_or(false)
-                        };
-                        if should_send_deafen {
-                            let _ = broadcast_voice_state(&room_clone, true, Some(&pid)).await;
-                        }
-                        emit_participants_snapshot(&app_clone, &inner_arc).await;
-                    }
-                    RoomEvent::ParticipantDisconnected(participant) => {
-                        let pid = participant.identity().to_string();
-                        let deafened_changed = {
-                            let mut guard = inner_arc.lock().await;
-                            if let Some(s) = guard.as_mut() {
-                                if let Some(ref out) = s.audio_out {
-                                    out.remove_participant(&pid);
-                                }
-                                let owner = strip_screenshare_prefix(&pid);
-                                s.video_hub.remove_stream(&format!("{owner}:camera"));
-                                s.video_hub.remove_stream(&format!("{owner}:screen_share"));
-                                s.speaking_identities.remove(&pid);
-                                s.deafened_identities.remove(&pid)
-                            } else {
-                                false
-                            }
-                        };
-                        if deafened_changed {
-                            emit_deafened_snapshot(&app_clone, &inner_arc).await;
-                        }
-                        emit_participants_snapshot(&app_clone, &inner_arc).await;
-                    }
-                    RoomEvent::DataReceived {
-                        payload,
-                        participant: Some(participant),
-                        ..
-                    } => {
-                        if let Some(is_deaf) = parse_voice_state_payload(&payload) {
-                            let pid = participant.identity().to_string();
-                            {
-                                let mut guard = inner_arc.lock().await;
-                                if let Some(s) = guard.as_mut() {
-                                    if is_deaf {
-                                        s.deafened_identities.insert(pid);
-                                    } else {
-                                        s.deafened_identities.remove(&pid);
-                                    }
-                                }
-                            }
-                            emit_deafened_snapshot(&app_clone, &inner_arc).await;
-                        }
-                    }
-                    RoomEvent::ActiveSpeakersChanged { speakers } => {
-                        let ids: Vec<String> = speakers
-                            .into_iter()
-                            .filter(|p| is_participant_mic_active(p))
-                            .map(|p| p.identity().to_string())
-                            .collect();
-                        {
-                            let mut guard = inner_arc.lock().await;
-                            if let Some(s) = guard.as_mut() {
-                                s.speaking_identities = ids.iter().cloned().collect();
-                            }
-                        }
-                        let _ = app_clone.emit("media-bridge:speaking-changed", ids);
-                    }
-                    RoomEvent::TrackPublished {
-                        publication,
-                        participant,
-                    } => {
-                        if is_self_screenshare(participant.identity().as_str(), &local_id_clone) {
-                            publication.set_subscribed(false);
-                        }
-                        let _ = app_clone.emit("media-bridge:track-updated", serde_json::json!({}));
-                        emit_participants_snapshot(&app_clone, &inner_arc).await;
-                    }
-                    RoomEvent::TrackSubscribed {
-                        track,
-                        publication,
-                        participant,
-                    } => {
-                        let raw_id = participant.identity().to_string();
-                        if is_self_screenshare(&raw_id, &local_id_clone) {
-                            publication.set_subscribed(false);
-                            let _ =
-                                app_clone.emit("media-bridge:track-updated", serde_json::json!({}));
-                            emit_participants_snapshot(&app_clone, &inner_arc).await;
-                            continue;
-                        }
-                        let owner = strip_screenshare_prefix(&raw_id).to_string();
-                        let source = publication.source();
-
-                        match track {
-                            RemoteTrack::Audio(audio_track) => {
-                                let is_screen_audio = source == TrackSource::ScreenshareAudio;
-                                if is_screen_audio && owner == local_id_clone {
-                                    continue;
-                                }
-                                let sid = publication.sid().to_string();
-                                let guard = inner_arc.lock().await;
-                                if let Some(s) = guard.as_ref() {
-                                    if let Some(ref out) = s.audio_out {
-                                        out.add_track(
-                                            sid,
-                                            owner,
-                                            is_screen_audio,
-                                            audio_track.rtc_track(),
-                                        );
-                                    }
-                                }
-                            }
-                            RemoteTrack::Video(video_track) => {
-                                let (source_key, max_fps) = match source {
-                                    TrackSource::Screenshare => ("screen_share", 60),
-                                    _ => ("camera", 30),
-                                };
-                                let stream_key = format!("{owner}:{source_key}");
-                                let guard = inner_arc.lock().await;
-                                if let Some(s) = guard.as_ref() {
-                                    s.video_hub.attach_remote_video_track(
-                                        stream_key,
-                                        video_track.rtc_track(),
-                                        max_fps,
-                                    );
-                                }
-                            }
-                        }
-                        let _ = app_clone.emit("media-bridge:track-updated", serde_json::json!({}));
-                        emit_participants_snapshot(&app_clone, &inner_arc).await;
-                    }
-                    RoomEvent::TrackUnsubscribed {
-                        track,
-                        publication,
-                        participant,
-                    } => {
-                        let sid = publication.sid().to_string();
-                        let owner = strip_screenshare_prefix(participant.identity().as_str()).to_string();
-                        let source = publication.source();
-                        let guard = inner_arc.lock().await;
-                        if let Some(s) = guard.as_ref() {
-                            match track {
-                                RemoteTrack::Audio(_) => {
-                                    if let Some(ref out) = s.audio_out {
-                                        out.remove_track(&sid);
-                                    }
-                                }
-                                RemoteTrack::Video(_) => {
-                                    let source_key = if source == TrackSource::Screenshare {
-                                        "screen_share"
-                                    } else {
-                                        "camera"
-                                    };
-                                    s.video_hub.remove_stream(&format!("{owner}:{source_key}"));
-                                }
-                            }
-                        }
-                        drop(guard);
-                        let _ = app_clone.emit("media-bridge:track-updated", serde_json::json!({}));
-                        emit_participants_snapshot(&app_clone, &inner_arc).await;
-                    }
-                    RoomEvent::TrackMuted { .. }
-                    | RoomEvent::TrackUnmuted { .. }
-                    | RoomEvent::TrackUnpublished { .. }
-                    | RoomEvent::LocalTrackPublished { .. }
-                    | RoomEvent::LocalTrackUnpublished { .. } => {
-                        let _ = app_clone.emit("media-bridge:track-updated", serde_json::json!({}));
-                        emit_participants_snapshot(&app_clone, &inner_arc).await;
-                    }
-                    RoomEvent::Disconnected { reason } => {
-                        let _ = app_clone.emit(
-                            "media-bridge:disconnected",
-                            serde_json::json!({ "reason": format!("{reason:?}") }),
-                        );
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-        });
-
         let session = ActiveSession {
-            room,
+            room: Arc::clone(&room),
             server_url: url,
             local_identity: local_identity.clone(),
             is_e2ee,
@@ -415,8 +226,8 @@ impl MediaBridge {
             mic_pub_sid,
             camera: None,
             camera_pub_sid: None,
-            video_hub,
-            event_task,
+            video_hub: Arc::clone(&video_hub),
+            event_task: None,
             audio_config,
             input_device_id,
             output_device_id,
@@ -432,9 +243,254 @@ impl MediaBridge {
             speaking_identities: HashSet::new(),
         };
 
+        let inner_arc = Arc::clone(&self.inner);
+        let app_clone = app.clone();
+        let room_clone = Arc::clone(&room);
+        let local_id_clone = local_identity.clone();
+
         {
             let mut guard = self.inner.lock().await;
             *guard = Some(session);
+
+            // Spawn event_task only AFTER *guard = Some(session) so early RoomEvents never drop
+            let event_task = tokio::spawn(async move {
+                while let Some(event) = events.recv().await {
+                    match event {
+                        RoomEvent::ParticipantConnected(participant) => {
+                            let pid = participant.identity().to_string();
+                            let should_send_deafen = {
+                                let guard = inner_arc.lock().await;
+                                guard
+                                    .as_ref()
+                                    .map(|s| s.is_deafened && !pid.starts_with("screenshare:"))
+                                    .unwrap_or(false)
+                            };
+                            if should_send_deafen {
+                                let _ = broadcast_voice_state(&room_clone, true, Some(&pid)).await;
+                            }
+                            emit_participants_snapshot(&app_clone, &inner_arc).await;
+                        }
+                        RoomEvent::ParticipantDisconnected(participant) => {
+                            let pid = participant.identity().to_string();
+                            let deafened_changed = {
+                                let mut guard = inner_arc.lock().await;
+                                if let Some(s) = guard.as_mut() {
+                                    if let Some(ref out) = s.audio_out {
+                                        out.remove_participant(&pid);
+                                    }
+                                    let owner = strip_screenshare_prefix(&pid);
+                                    s.video_hub.remove_stream(&format!("{owner}:camera"));
+                                    s.video_hub.remove_stream(&format!("{owner}:screen_share"));
+                                    s.speaking_identities.remove(&pid);
+                                    s.deafened_identities.remove(&pid)
+                                } else {
+                                    false
+                                }
+                            };
+                            if deafened_changed {
+                                emit_deafened_snapshot(&app_clone, &inner_arc).await;
+                            }
+                            emit_participants_snapshot(&app_clone, &inner_arc).await;
+                        }
+                        RoomEvent::DataReceived {
+                            payload,
+                            participant: Some(participant),
+                            ..
+                        } => {
+                            if let Some(is_deaf) = parse_voice_state_payload(&payload) {
+                                let pid = participant.identity().to_string();
+                                {
+                                    let mut guard = inner_arc.lock().await;
+                                    if let Some(s) = guard.as_mut() {
+                                        if is_deaf {
+                                            s.deafened_identities.insert(pid);
+                                        } else {
+                                            s.deafened_identities.remove(&pid);
+                                        }
+                                    }
+                                }
+                                emit_deafened_snapshot(&app_clone, &inner_arc).await;
+                            }
+                        }
+                        RoomEvent::ActiveSpeakersChanged { speakers } => {
+                            let ids: Vec<String> = speakers
+                                .into_iter()
+                                .filter(|p| is_participant_mic_active(p))
+                                .map(|p| p.identity().to_string())
+                                .collect();
+                            {
+                                let mut guard = inner_arc.lock().await;
+                                if let Some(s) = guard.as_mut() {
+                                    s.speaking_identities = ids.iter().cloned().collect();
+                                }
+                            }
+                            let _ = app_clone.emit("media-bridge:speaking-changed", ids);
+                        }
+                        RoomEvent::TrackPublished {
+                            publication,
+                            participant,
+                        } => {
+                            if is_self_screenshare(participant.identity().as_str(), &local_id_clone) {
+                                publication.set_subscribed(false);
+                            }
+                            let _ = app_clone.emit("media-bridge:track-updated", serde_json::json!({}));
+                            emit_participants_snapshot(&app_clone, &inner_arc).await;
+                        }
+                        RoomEvent::TrackSubscribed {
+                            track,
+                            publication,
+                            participant,
+                        } => {
+                            let raw_id = participant.identity().to_string();
+                            if is_self_screenshare(&raw_id, &local_id_clone) {
+                                publication.set_subscribed(false);
+                                let _ =
+                                    app_clone.emit("media-bridge:track-updated", serde_json::json!({}));
+                                emit_participants_snapshot(&app_clone, &inner_arc).await;
+                                continue;
+                            }
+                            let owner = strip_screenshare_prefix(&raw_id).to_string();
+                            let source = publication.source();
+
+                            match track {
+                                RemoteTrack::Audio(audio_track) => {
+                                    let is_screen_audio = source == TrackSource::ScreenshareAudio;
+                                    if is_screen_audio && owner == local_id_clone {
+                                        continue;
+                                    }
+                                    let sid = publication.sid().to_string();
+                                    let guard = inner_arc.lock().await;
+                                    if let Some(s) = guard.as_ref() {
+                                        if let Some(ref out) = s.audio_out {
+                                            out.add_track(
+                                                sid,
+                                                owner,
+                                                is_screen_audio,
+                                                audio_track.rtc_track(),
+                                            );
+                                        }
+                                    }
+                                }
+                                RemoteTrack::Video(video_track) => {
+                                    let (source_key, max_fps) = match source {
+                                        TrackSource::Screenshare => ("screen_share", 60),
+                                        _ => ("camera", 30),
+                                    };
+                                    let stream_key = format!("{owner}:{source_key}");
+                                    let guard = inner_arc.lock().await;
+                                    if let Some(s) = guard.as_ref() {
+                                        s.video_hub.attach_remote_video_track(
+                                            stream_key,
+                                            video_track.rtc_track(),
+                                            max_fps,
+                                        );
+                                    }
+                                }
+                            }
+                            let _ = app_clone.emit("media-bridge:track-updated", serde_json::json!({}));
+                            emit_participants_snapshot(&app_clone, &inner_arc).await;
+                        }
+                        RoomEvent::TrackUnsubscribed {
+                            track,
+                            publication,
+                            participant,
+                        } => {
+                            let sid = publication.sid().to_string();
+                            let owner = strip_screenshare_prefix(participant.identity().as_str()).to_string();
+                            let source = publication.source();
+                            let guard = inner_arc.lock().await;
+                            if let Some(s) = guard.as_ref() {
+                                match track {
+                                    RemoteTrack::Audio(_) => {
+                                        if let Some(ref out) = s.audio_out {
+                                            out.remove_track(&sid);
+                                        }
+                                    }
+                                    RemoteTrack::Video(_) => {
+                                        let source_key = if source == TrackSource::Screenshare {
+                                            "screen_share"
+                                        } else {
+                                            "camera"
+                                        };
+                                        s.video_hub.remove_stream(&format!("{owner}:{source_key}"));
+                                    }
+                                }
+                            }
+                            drop(guard);
+                            let _ = app_clone.emit("media-bridge:track-updated", serde_json::json!({}));
+                            emit_participants_snapshot(&app_clone, &inner_arc).await;
+                        }
+                        RoomEvent::TrackMuted { .. }
+                        | RoomEvent::TrackUnmuted { .. }
+                        | RoomEvent::TrackUnpublished { .. }
+                        | RoomEvent::LocalTrackPublished { .. }
+                        | RoomEvent::LocalTrackUnpublished { .. } => {
+                            let _ = app_clone.emit("media-bridge:track-updated", serde_json::json!({}));
+                            emit_participants_snapshot(&app_clone, &inner_arc).await;
+                        }
+                        RoomEvent::Disconnected { reason } => {
+                            let _ = app_clone.emit(
+                                "media-bridge:disconnected",
+                                serde_json::json!({ "reason": format!("{reason:?}") }),
+                            );
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+            });
+
+            if let Some(s) = guard.as_mut() {
+                s.event_task = Some(event_task);
+            }
+        }
+
+        // Attach any remote tracks already subscribed during Room::connect
+        {
+            let guard = self.inner.lock().await;
+            if let Some(s) = guard.as_ref() {
+                for (_, remote) in room.remote_participants() {
+                    let raw_id = remote.identity().to_string();
+                    if is_self_screenshare(&raw_id, &local_identity) {
+                        for (_, pub_track) in remote.track_publications() {
+                            pub_track.set_subscribed(false);
+                        }
+                        continue;
+                    }
+                    let owner = strip_screenshare_prefix(&raw_id).to_string();
+                    for (sid, pub_track) in remote.track_publications() {
+                        match pub_track.track() {
+                            Some(RemoteTrack::Audio(audio_track)) => {
+                                let is_screen_audio =
+                                    pub_track.source() == TrackSource::ScreenshareAudio;
+                                if is_screen_audio && owner == local_identity {
+                                    continue;
+                                }
+                                if let Some(ref out) = s.audio_out {
+                                    out.add_track(
+                                        sid.to_string(),
+                                        owner.clone(),
+                                        is_screen_audio,
+                                        audio_track.rtc_track(),
+                                    );
+                                }
+                            }
+                            Some(RemoteTrack::Video(video_track)) => {
+                                let (source_key, max_fps) = match pub_track.source() {
+                                    TrackSource::Screenshare => ("screen_share", 60),
+                                    _ => ("camera", 30),
+                                };
+                                s.video_hub.attach_remote_video_track(
+                                    format!("{owner}:{source_key}"),
+                                    video_track.rtc_track(),
+                                    max_fps,
+                                );
+                            }
+                            None => {}
+                        }
+                    }
+                }
+            }
         }
 
         emit_participants_snapshot(&app, &self.inner).await;
@@ -453,7 +509,9 @@ impl MediaBridge {
             guard.take()
         };
         if let Some(mut session) = prev {
-            session.event_task.abort();
+            if let Some(task) = session.event_task.take() {
+                task.abort();
+            }
             if let Some(cam) = session.camera.take() {
                 cam.stop();
             }
@@ -491,7 +549,7 @@ impl MediaBridge {
                 }
             }
         } else if !muted {
-            // Publish microphone lazily on first unmute
+            // Publish microphone lazily on first unmute (start capture before publish_track)
             let src = NativeAudioSource::new(
                 AudioSourceOptions {
                     echo_cancellation: session.audio_config.echo_cancellation,
@@ -503,19 +561,6 @@ impl MediaBridge {
                 1,
                 200,
             );
-            let track = LocalAudioTrack::create_audio_track(
-                "microphone",
-                RtcAudioSource::Native(src.clone()),
-            );
-            let mut pub_opts = TrackPublishOptions::default();
-            pub_opts.source = TrackSource::Microphone;
-            let publication = session
-                .room
-                .local_participant()
-                .publish_track(LocalTrack::Audio(track), pub_opts)
-                .await
-                .map_err(|e| format!("Failed to publish microphone: {e}"))?;
-            session.mic_pub_sid = Some(publication.sid());
             let vad_app = app.clone();
             let ctrl = AudioInputController::start(
                 src.clone(),
@@ -525,6 +570,25 @@ impl MediaBridge {
                     let _ = vad_app.emit("media-bridge:vad-state", vad);
                 },
             )?;
+            let track = LocalAudioTrack::create_audio_track(
+                "microphone",
+                RtcAudioSource::Native(src.clone()),
+            );
+            let mut pub_opts = TrackPublishOptions::default();
+            pub_opts.source = TrackSource::Microphone;
+            let publication = match session
+                .room
+                .local_participant()
+                .publish_track(LocalTrack::Audio(track), pub_opts)
+                .await
+            {
+                Ok(pub_track) => pub_track,
+                Err(e) => {
+                    ctrl.stop();
+                    return Err(format!("Failed to publish microphone: {e}"));
+                }
+            };
+            session.mic_pub_sid = Some(publication.sid());
             ctrl.set_input_volume(session.input_volume);
             session.audio_in = Some(ctrl);
             session.audio_source = Some(src);
@@ -598,25 +662,32 @@ impl MediaBridge {
                 },
                 false,
             );
+            let local_key = format!("{}:camera", session.local_identity);
+            let cam = CameraController::start(
+                session.video_device_id.clone(),
+                video_source.clone(),
+                Arc::clone(&session.video_hub),
+                local_key.clone(),
+            )?;
             let track = LocalVideoTrack::create_video_track(
                 "camera",
-                RtcVideoSource::Native(video_source.clone()),
+                RtcVideoSource::Native(video_source),
             );
             let mut pub_opts = TrackPublishOptions::default();
             pub_opts.source = TrackSource::Camera;
-            let publication = session
+            let publication = match session
                 .room
                 .local_participant()
                 .publish_track(LocalTrack::Video(track), pub_opts)
                 .await
-                .map_err(|e| format!("Failed to publish camera: {e}"))?;
-            let local_key = format!("{}:camera", session.local_identity);
-            let cam = CameraController::start(
-                session.video_device_id.clone(),
-                video_source,
-                Arc::clone(&session.video_hub),
-                local_key,
-            )?;
+            {
+                Ok(pub_track) => pub_track,
+                Err(e) => {
+                    cam.stop();
+                    session.video_hub.remove_stream(&local_key);
+                    return Err(format!("Failed to publish camera: {e}"));
+                }
+            };
             session.camera = Some(cam);
             session.camera_pub_sid = Some(publication.sid());
         }
@@ -843,15 +914,26 @@ impl MediaBridge {
         key_index: Option<i32>,
     ) -> Result<(), String> {
         let idx = key_index.unwrap_or(0);
+        let mut new_b64: Option<String> = None;
         {
-            let guard = self.inner.lock().await;
-            if let Some(session) = guard.as_ref() {
+            let mut guard = self.inner.lock().await;
+            if let Some(session) = guard.as_mut() {
                 if let Some(ref kp) = session.key_provider {
-                    let _ = kp.ratchet_shared_key(idx);
+                    if let Some(new_key) = kp.ratchet_shared_key(idx) {
+                        new_b64 = Some(base64::engine::general_purpose::STANDARD.encode(&new_key));
+                        if let Some(mut old) = session.last_e2ee_key.replace(new_key) {
+                            old.zeroize();
+                        }
+                    }
                 }
             }
         }
-        let _ = ss_send_ratchet(&self.screenshare_state).await;
+        if let Some(mut b64) = new_b64 {
+            let _ = ss_send_e2ee_key(&self.screenshare_state, &b64).await;
+            b64.zeroize();
+        } else {
+            let _ = ss_send_ratchet(&self.screenshare_state).await;
+        }
         Ok(())
     }
 

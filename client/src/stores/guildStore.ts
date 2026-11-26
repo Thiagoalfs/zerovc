@@ -12,6 +12,10 @@ import { useVoiceStore } from './voiceStore';
 import { messageCodec } from '../messaging/messageCodec';
 import { deviceManager } from '../crypto/deviceManager';
 import { resolveFirstUnreadMessageId } from '../utils/unread';
+import { setCachedMessagesLRU, touchLruKey } from '../utils/lruMessageCache';
+
+const channelLruOrder: string[] = [];
+const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 interface GuildState {
   guilds: Guild[];
@@ -242,6 +246,9 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     }
 
     const cachedMessages = get().messagesByChannel[channel.id];
+    if (cachedMessages) {
+      touchLruKey(channelLruOrder, channel.id);
+    }
     const hasFetched = Boolean(get().fetchedChannels[channel.id]);
     const wasUnreadBeforeSelect = get().unreadChannels.has(channel.id);
 
@@ -310,16 +317,17 @@ export const useGuildStore = create<GuildState>((set, get) => ({
               shouldAckEmpty = true;
             }
           }
+          const lru = setCachedMessagesLRU(
+            state.messagesByChannel,
+            channelLruOrder,
+            channel.id,
+            merged,
+            { ...state.fetchedChannels, [channel.id]: true }
+          );
           return {
             messages: state.activeChannel?.id === channel.id ? merged : state.messages,
-            messagesByChannel: {
-              ...state.messagesByChannel,
-              [channel.id]: merged,
-            },
-            fetchedChannels: {
-              ...state.fetchedChannels,
-              [channel.id]: true,
-            },
+            messagesByChannel: lru.cache,
+            fetchedChannels: lru.fetched!,
             hasMoreByChannel: {
               ...state.hasMoreByChannel,
               [channel.id]: messages.length === 50,
@@ -381,18 +389,25 @@ export const useGuildStore = create<GuildState>((set, get) => ({
       const uniqueOlder = olderMessages.filter((m) => !existingIds.has(m.id));
       const combined = [...uniqueOlder, ...currentChannelMessages];
 
-      set((curr) => ({
-        messages: curr.activeChannel?.id === channelId ? combined : curr.messages,
-        messagesByChannel: {
-          ...curr.messagesByChannel,
-          [channelId]: combined,
-        },
-        hasMoreByChannel: {
-          ...curr.hasMoreByChannel,
-          [channelId]: hasMore,
-        },
-        isLoadingMoreMessages: false,
-      }));
+      set((curr) => {
+        const lru = setCachedMessagesLRU(
+          curr.messagesByChannel,
+          channelLruOrder,
+          channelId,
+          combined,
+          curr.fetchedChannels
+        );
+        return {
+          messages: curr.activeChannel?.id === channelId ? combined : curr.messages,
+          messagesByChannel: lru.cache,
+          ...(lru.fetched ? { fetchedChannels: lru.fetched } : {}),
+          hasMoreByChannel: {
+            ...curr.hasMoreByChannel,
+            [channelId]: hasMore,
+          },
+          isLoadingMoreMessages: false,
+        };
+      });
 
       const encryptedList = olderMessages.filter((m) => m.encrypted);
       if (encryptedList.length > 0) {
@@ -839,12 +854,17 @@ export const useGuildStore = create<GuildState>((set, get) => ({
     set((state) => {
       if (state.activeChannel?.id !== activeChannel.id) return state;
       const chMsgs = state.messagesByChannel[activeChannel.id] || [];
+      const lru = setCachedMessagesLRU(
+        state.messagesByChannel,
+        channelLruOrder,
+        activeChannel.id,
+        [...chMsgs, tempMessage],
+        state.fetchedChannels
+      );
       return {
         messages: [...state.messages, tempMessage],
-        messagesByChannel: {
-          ...state.messagesByChannel,
-          [activeChannel.id]: [...chMsgs, tempMessage],
-        },
+        messagesByChannel: lru.cache,
+        ...(lru.fetched ? { fetchedChannels: lru.fetched } : {}),
         firstUnreadMessageIdByChannel: {
           ...state.firstUnreadMessageIdByChannel,
           [activeChannel.id]: null,
@@ -1072,10 +1092,15 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         updatedChannelMsgs = updatedChannelMsgs.slice(-200);
       }
 
-      const nextMessagesByChannel = {
-        ...state.messagesByChannel,
-        [message.channel_id]: updatedChannelMsgs,
-      };
+      const lru = setCachedMessagesLRU(
+        state.messagesByChannel,
+        channelLruOrder,
+        message.channel_id,
+        updatedChannelMsgs,
+        state.fetchedChannels
+      );
+      const nextMessagesByChannel = lru.cache;
+      const nextFetchedChannels = lru.fetched || state.fetchedChannels;
 
       // Find target guild for mute check
       let targetGuildId = message.guild_id || '';
@@ -1138,6 +1163,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         return {
           messages: nextMessages,
           messagesByChannel: nextMessagesByChannel,
+          fetchedChannels: nextFetchedChannels,
         };
       } else {
         // Mark as unread
@@ -1167,6 +1193,7 @@ export const useGuildStore = create<GuildState>((set, get) => ({
           guildMentions: nextGuildMentions,
           channelMentions: nextChannelMentions,
           messagesByChannel: nextMessagesByChannel,
+          fetchedChannels: nextFetchedChannels,
           firstUnreadMessageIdByChannel: nextFirstUnread,
         };
       }
@@ -1624,27 +1651,40 @@ export const useGuildStore = create<GuildState>((set, get) => ({
   },
 
   setTyping: (channelId: string, userId: string) => {
+    const timerKey = `${channelId}:${userId}`;
+    const existingTimer = typingTimers.get(timerKey);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
     set((state) => {
       const nextMap = new Map(state.typingUsers);
       const currentSet = new Set(nextMap.get(channelId) || []);
+      if (currentSet.has(userId)) {
+        return state;
+      }
       currentSet.add(userId);
       nextMap.set(channelId, currentSet);
       return { typingUsers: nextMap };
     });
 
-    setTimeout(() => {
-      set((state) => {
-        const nextMap = new Map(state.typingUsers);
-        const currentSet = new Set(nextMap.get(channelId) || []);
-        currentSet.delete(userId);
-        if (currentSet.size === 0) {
-          nextMap.delete(channelId);
-        } else {
-          nextMap.set(channelId, currentSet);
-        }
-        return { typingUsers: nextMap };
-      });
-    }, 4000);
+    typingTimers.set(
+      timerKey,
+      setTimeout(() => {
+        typingTimers.delete(timerKey);
+        set((state) => {
+          const nextMap = new Map(state.typingUsers);
+          const currentSet = new Set(nextMap.get(channelId) || []);
+          currentSet.delete(userId);
+          if (currentSet.size === 0) {
+            nextMap.delete(channelId);
+          } else {
+            nextMap.set(channelId, currentSet);
+          }
+          return { typingUsers: nextMap };
+        });
+      }, 4000)
+    );
   },
 
   createRole: async (guildId: string, name: string, color: string, permissions = 0, hoist = false, mentionable = false) => {

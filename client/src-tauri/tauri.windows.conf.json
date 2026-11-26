@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "resources": [
+      "../native/bin/zerovc-screenshare.exe",
+      "../native/bin/zerovc-audio-capture.exe"
+    ]
+  }
+}

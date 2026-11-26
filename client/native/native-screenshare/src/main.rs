@@ -25,6 +25,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum StdinCommand {
+    Init { token: String },
     SetE2eeKey { key: String },
     RatchetE2eeKey,
     Stop,
@@ -47,9 +48,9 @@ pub struct Args {
     #[arg(long)]
     pub url: String,
 
-    /// Dedicated LiveKit screenshare JWT token (identity: screenshare:<userId>)
+    /// Dedicated LiveKit screenshare JWT token (optional if sent via stdin init JSON)
     #[arg(long)]
-    pub token: String,
+    pub token: Option<String>,
 
     /// Electron desktopCapturer sourceId (e.g. screen:0:0 or window:12345:0)
     #[arg(long, default_value = "screen:0:0")]
@@ -108,6 +109,37 @@ async fn main() {
     args.width = (args.width.max(320)) & !3;
     args.height = (args.height.max(180)) & !1;
     args.fps = args.fps.clamp(5, 60);
+
+    let mut stdin_lines = BufReader::new(tokio::io::stdin()).lines();
+    let token = match args.token.take() {
+        Some(t) if !t.trim().is_empty() => t,
+        _ => {
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                stdin_lines.next_line(),
+            )
+            .await
+            {
+                Ok(Ok(Some(line))) => match serde_json::from_str::<StdinCommand>(line.trim()) {
+                    Ok(StdinCommand::Init { token }) if !token.trim().is_empty() => token,
+                    _ => {
+                        emit_event(
+                            "error",
+                            json!({ "message": "Expected init JSON with LiveKit token on stdin" }),
+                        );
+                        std::process::exit(1);
+                    }
+                },
+                _ => {
+                    emit_event(
+                        "error",
+                        json!({ "message": "Timed out or closed waiting for stdin init token" }),
+                    );
+                    std::process::exit(1);
+                }
+            }
+        }
+    };
 
     let stop_flag = Arc::new(AtomicBool::new(false));
 
@@ -195,7 +227,7 @@ async fn main() {
     }
 
     // 2. Connect to LiveKit only after capture source is confirmed ready
-    let (room, mut room_events) = match Room::connect(&args.url, &args.token, room_opts).await {
+    let (room, mut room_events) = match Room::connect(&args.url, &token, room_opts).await {
         Ok(res) => res,
         Err(err) => {
             stop_flag.store(true, Ordering::Relaxed);
@@ -303,8 +335,7 @@ async fn main() {
     let stdin_stop = stop_flag.clone();
     let e2ee_manager = room.e2ee_manager().clone();
     let stdin_task = tokio::spawn(async move {
-        let mut lines = BufReader::new(tokio::io::stdin()).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
+        while let Ok(Some(line)) = stdin_lines.next_line().await {
             let trimmed = line.trim();
             if trimmed.is_empty() {
                 continue;
@@ -313,6 +344,7 @@ async fn main() {
                 break;
             }
             match serde_json::from_str::<StdinCommand>(trimmed) {
+                Ok(StdinCommand::Init { .. }) => {}
                 Ok(StdinCommand::Stop) => break,
                 Ok(StdinCommand::SetE2eeKey { key }) => {
                     match base64::engine::general_purpose::STANDARD.decode(key.trim()) {
@@ -389,4 +421,23 @@ async fn main() {
     }
     let _ = room.close().await;
     emit_event("stopped", json!({}));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_stdin_init_command_parses_and_args_allow_omitting_token() {
+        let cmd: StdinCommand =
+            serde_json::from_str(r#"{"type":"init","token":"jwt-secret-123"}"#).unwrap();
+        match cmd {
+            StdinCommand::Init { token } => assert_eq!(token, "jwt-secret-123"),
+            _ => panic!("expected Init variant"),
+        }
+
+        let parsed = Args::try_parse_from(["zerovc-screenshare", "--url", "wss://lk.example"])
+            .expect("Args should allow omitting --token");
+        assert!(parsed.token.is_none());
+    }
 }

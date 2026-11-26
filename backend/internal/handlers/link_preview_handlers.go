@@ -197,7 +197,11 @@ func (h *LinkPreviewHandler) GetMetadata(w http.ResponseWriter, r *http.Request)
 
 	statusCode, htmlContent, err := fetchPage(crawlerUA)
 	if err != nil && htmlContent == "" {
-		http.Error(w, fmt.Sprintf(`{"error":"failed to fetch url: %s"}`, err.Error()), http.StatusBadGateway)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "failed to fetch url: " + err.Error(),
+		})
 		return
 	}
 

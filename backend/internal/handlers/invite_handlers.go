@@ -349,11 +349,35 @@ func (h *InviteHandler) GetInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store in cache (60s TTL)
+	// Store in cache (60s TTL, hard cap at 2000 entries)
+	now := time.Now()
 	h.mu.Lock()
+	if _, exists := h.cache[code]; !exists && len(h.cache) >= 2000 {
+		for k, v := range h.cache {
+			if now.After(v.expiresAt) {
+				delete(h.cache, k)
+			}
+		}
+		for len(h.cache) >= 2000 {
+			var oldestKey string
+			var oldestExp time.Time
+			first := true
+			for k, v := range h.cache {
+				if first || v.expiresAt.Before(oldestExp) {
+					oldestKey = k
+					oldestExp = v.expiresAt
+					first = false
+				}
+			}
+			if first {
+				break
+			}
+			delete(h.cache, oldestKey)
+		}
+	}
 	h.cache[code] = cachedInvite{
 		payload:   payload,
-		expiresAt: time.Now().Add(60 * time.Second),
+		expiresAt: now.Add(60 * time.Second),
 	}
 	h.mu.Unlock()
 

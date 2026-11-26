@@ -15,7 +15,7 @@ import {
   hexToBytes,
   importVaultKeyFromBytes,
 } from './recovery';
-import { GroupSession, ensureVodozemacInitialized } from './vodozemac';
+import { GroupSession, InboundGroupSession, ensureVodozemacInitialized } from './vodozemac';
 
 export interface BackupSessionItem {
   conversationId: string;
@@ -77,25 +77,35 @@ export class BackupManager {
    * Persists raw bytes of the Vault Key securely encrypted into KeyStore ('account', 'vault_key').
    * Allows desktop and browser sessions to retain vault key across page reloads without re-prompting password.
    */
-  async saveVaultKeyToStore(rawBytes: Uint8Array): Promise<void> {
+  async saveVaultKeyToStore(rawBytes: Uint8Array, userId?: string): Promise<void> {
     const hex = bytesToHex(rawBytes);
     await keyStore.encryptAndStorePickle('account', 'vault_key', hex, {
-      userId: this.activeUserId,
+      userId: userId || this.activeUserId,
       savedAt: Date.now(),
     });
   }
 
   /**
    * Retrieves and decrypts the persisted Vault Key from KeyStore ('account', 'vault_key')
-   * and sets activeVaultKey in memory.
+   * and sets activeVaultKey in memory. Ignores and clears any key belonging to another user.
    */
-  async loadVaultKeyFromStore(): Promise<CryptoKey | null> {
+  async loadVaultKeyFromStore(expectedUserId?: string): Promise<CryptoKey | null> {
     try {
+      const meta = await keyStore.getRecordMeta('account', 'vault_key');
+      if (!meta) return null;
+      const targetUserId = expectedUserId || this.activeUserId;
+      if (targetUserId && meta.userId !== targetUserId) {
+        await keyStore.deleteRecord('account', 'vault_key').catch(() => {});
+        return null;
+      }
       const hex = await keyStore.retrieveAndDecryptPickle('account', 'vault_key');
       if (!hex) return null;
       const rawBytes = hexToBytes(hex);
       const key = await importVaultKeyFromBytes(rawBytes);
       this.activeVaultKey = key;
+      if (meta.userId) {
+        this.activeUserId = meta.userId;
+      }
       return key;
     } catch (err) {
       console.warn('[BackupManager] Failed to load vault key from store:', err);
@@ -135,7 +145,7 @@ export class BackupManager {
 
     let key = this.activeVaultKey;
     if (!key) {
-      key = await this.loadVaultKeyFromStore();
+      key = await this.loadVaultKeyFromStore(this.activeUserId || undefined);
     }
     if (!key) {
       return null;
@@ -224,16 +234,32 @@ export class BackupManager {
     const sessions: BackupSessionItem[] = [];
     const seenSessionIds = new Set<string>();
 
+    if (records.length > 0) {
+      await ensureVodozemacInitialized();
+    }
+
     for (const rec of records) {
-      if (rec && rec.sessionKey && rec.conversationId && rec.sessionId) {
-        sessions.push({
-          conversationId: rec.conversationId,
-          sessionId: rec.sessionId,
-          sessionKey: rec.sessionKey,
-          senderDeviceId: rec.senderDeviceId,
-          epoch: rec.epoch,
-        });
-        seenSessionIds.add(rec.sessionId);
+      if (rec && rec.conversationId && rec.sessionId && !seenSessionIds.has(rec.sessionId)) {
+        let sessionKey: string | undefined = rec.sessionKey;
+        if (!sessionKey) {
+          try {
+            const pickle = await keyStore.retrieveAndDecryptPickle('megolm_inbound', rec.sessionId);
+            if (pickle) {
+              const inbound = InboundGroupSession.fromPickle(pickle);
+              sessionKey = inbound.exportAt(inbound.firstKnownIndex());
+            }
+          } catch {}
+        }
+        if (sessionKey) {
+          sessions.push({
+            conversationId: rec.conversationId,
+            sessionId: rec.sessionId,
+            sessionKey,
+            senderDeviceId: rec.senderDeviceId,
+            epoch: rec.epoch,
+          });
+          seenSessionIds.add(rec.sessionId);
+        }
       }
     }
 

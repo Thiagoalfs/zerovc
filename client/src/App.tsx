@@ -62,8 +62,9 @@ import {
 import { keyRequestManager } from './crypto/keyRequestManager';
 import { megolmManager, RoomKeyToDevicePayload } from './crypto/megolmSession';
 import { rosterManager } from './crypto/rosterManager';
-import { callKeyManager } from './crypto/callKeys';
+import { callKeyManager, CallKeyToDevicePayload } from './crypto/callKeys';
 import { deviceManager } from './crypto/deviceManager';
+import { olmSessionManager, isOlmEncryptedPayload } from './crypto/olmSession';
 import { safeCryptoLogger } from './crypto/safeLogger';
 import { messageCodec } from './messaging/messageCodec';
 import {
@@ -1728,14 +1729,20 @@ export const App: React.FC = () => {
 
         if (msg.msg_type === 'room_key') {
           try {
-            const payload: RoomKeyToDevicePayload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload;
+            const payload = await olmSessionManager.decryptToDevicePayload<RoomKeyToDevicePayload>(
+              msg.sender_device_id,
+              msg.payload
+            );
             await keyRequestManager.handleRoomKeyReceived(payload);
           } catch (e) {
             safeCryptoLogger.error('Falha ao processar room_key to-device recebida', e);
           }
         } else if (msg.msg_type === 'key_request') {
           try {
-            const payload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload;
+            const raw = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload;
+            const payload = isOlmEncryptedPayload(raw)
+              ? await olmSessionManager.decryptToDevicePayload(msg.sender_device_id, raw)
+              : raw;
             const myDeviceId = (typeof localStorage !== 'undefined' ? localStorage.getItem('zerovc_device_id') : '') || '';
             await megolmManager.handleIncomingKeyRequest(payload, myDeviceId);
           } catch (e) {
@@ -1743,7 +1750,10 @@ export const App: React.FC = () => {
           }
         } else if (msg.msg_type === 'call_key') {
           try {
-            const payload = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload;
+            const payload = await olmSessionManager.decryptToDevicePayload<CallKeyToDevicePayload>(
+              msg.sender_device_id,
+              msg.payload
+            );
             await callKeyManager.handleIncomingCallKey(payload);
           } catch (e) {
             safeCryptoLogger.error('Falha ao processar call_key to-device recebida', e);

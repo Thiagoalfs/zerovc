@@ -95,6 +95,7 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
   const [secretKey, setSecretKey] = useState<string | null>(null);
   const [totpCode, setTotpCode] = useState('');
+  const [twoFactorPassword, setTwoFactorPassword] = useState('');
   const [twoFactorError, setTwoFactorError] = useState<string | null>(null);
   const [is2FALoading, setIs2FALoading] = useState(false);
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
@@ -133,6 +134,7 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
       setConfirmPassword('');
     } else if (activeModal === '2fa') {
       setTwoFactorError(null);
+      setTwoFactorPassword('');
       setTotpCode('');
       if (!user.two_factor_enabled) {
         let cancelled = false;
@@ -342,9 +344,15 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
         setUser({ ...user, two_factor_enabled: false });
         onClose();
       } else {
+        if (!twoFactorPassword.trim()) {
+          setTwoFactorError('Digite sua senha atual para ativar o 2FA.');
+          setIs2FALoading(false);
+          return;
+        }
         const res = await api.auth.enable2FA({
           secret: secretKey || '',
           code: totpCode.trim(),
+          password: twoFactorPassword,
         });
         setUser({ ...user, two_factor_enabled: true });
         if (res.backup_codes && res.backup_codes.length > 0) {
@@ -778,6 +786,18 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
               </div>
             )}
 
+            {!user.two_factor_enabled && (
+              <AppInput
+                label="Senha atual"
+                type="password"
+                value={twoFactorPassword}
+                onChange={(e) => setTwoFactorPassword(e.target.value)}
+                placeholder="Digite sua senha atual"
+                autoComplete="current-password"
+                disabled={is2FALoading}
+              />
+            )}
+
             <div>
               <label className={MODAL_FIELD_LABEL_CLASS}>Código de 6 dígitos</label>
               <div className="flex justify-center pt-1.5">
@@ -805,7 +825,7 @@ export const AccountSubModals: React.FC<AccountSubModalsProps> = ({
                 type={user.two_factor_enabled ? 'error' : 'primary'}
                 htmlType="submit"
                 loading={is2FALoading}
-                disabled={totpCode.length < 6}
+                disabled={totpCode.length < 6 || (!user.two_factor_enabled && !twoFactorPassword.trim())}
               >
                 {is2FALoading
                   ? 'Validando...'

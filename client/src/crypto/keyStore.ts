@@ -102,9 +102,11 @@ export class KeyStore {
       ? 'sessionId'
       : (storeName === 'megolm_outbound' ? 'conversationId' : 'id');
 
+    const { sessionKey: _sk, session_key: _sk2, ...safeExtraFields } = extraFields;
+
     const record: EncryptedRecord = {
       [primaryKeyProp]: id,
-      ...extraFields,
+      ...safeExtraFields,
       iv,
       data: ciphertext,
       updatedAt: Date.now()
@@ -221,6 +223,30 @@ export class KeyStore {
     }
     this.masterKey = null;
     this.memoryStore.clear();
+  }
+
+  async clearAll(): Promise<void> {
+    await this.close();
+    if (typeof indexedDB !== 'undefined') {
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
+        };
+        try {
+          const req = indexedDB.deleteDatabase(DB_NAME);
+          req.onsuccess = finish;
+          req.onerror = finish;
+          req.onblocked = finish;
+          setTimeout(finish, 500);
+        } catch {
+          finish();
+        }
+      });
+    }
   }
 }
 

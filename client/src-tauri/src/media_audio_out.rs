@@ -25,6 +25,8 @@ pub struct AudioDeviceInfo {
 struct TrackEntry {
     owner_identity: String,
     is_screen_audio: bool,
+    /// Pre-resolved per-track gain (`f32::to_bits()`) updated outside the cpal callback.
+    track_gain_bits: AtomicU32,
     buffer: VecDeque<f32>,
     stop_flag: Arc<AtomicBool>,
 }
@@ -51,28 +53,80 @@ impl MixerInner {
         }
     }
 
-    fn effective_gain_for_track(
+    fn resolve_track_gain(
         is_screen_audio: bool,
         owner_identity: &str,
-        is_deafened: bool,
-        master_vol: f32,
         user_volumes: &HashMap<String, f32>,
         stream_volumes: &HashMap<String, f32>,
         watched: &HashSet<String>,
     ) -> f32 {
-        if is_deafened {
-            return 0.0;
-        }
         if is_screen_audio {
             if !watched.contains(owner_identity) {
-                return 0.0;
+                0.0
+            } else {
+                stream_volumes.get(owner_identity).copied().unwrap_or(1.0).max(0.0)
             }
-            let stream_vol = stream_volumes.get(owner_identity).copied().unwrap_or(1.0);
-            (stream_vol * master_vol).max(0.0)
         } else {
-            let user_vol = user_volumes.get(owner_identity).copied().unwrap_or(1.0);
-            (user_vol * master_vol).max(0.0)
+            user_volumes.get(owner_identity).copied().unwrap_or(1.0).max(0.0)
         }
+    }
+
+    fn refresh_track_gains(&self) {
+        let Ok(user_volumes) = self.user_volumes.lock() else {
+            return;
+        };
+        let Ok(stream_volumes) = self.stream_volumes.lock() else {
+            return;
+        };
+        let Ok(watched) = self.watched_identities.lock() else {
+            return;
+        };
+        let Ok(tracks) = self.tracks.lock() else {
+            return;
+        };
+        for entry in tracks.values() {
+            let gain = Self::resolve_track_gain(
+                entry.is_screen_audio,
+                &entry.owner_identity,
+                &user_volumes,
+                &stream_volumes,
+                &watched,
+            );
+            entry
+                .track_gain_bits
+                .store(gain.to_bits(), Ordering::Relaxed);
+        }
+    }
+
+    fn set_user_volume(&self, identity: String, vol: f32) {
+        let clamped = if vol.is_finite() {
+            vol.clamp(0.0, 2.0)
+        } else {
+            1.0
+        };
+        if let Ok(mut guard) = self.user_volumes.lock() {
+            guard.insert(identity, clamped);
+        }
+        self.refresh_track_gains();
+    }
+
+    fn set_stream_volume(&self, owner_identity: String, vol: f32) {
+        let clamped = if vol.is_finite() {
+            vol.clamp(0.0, 2.0)
+        } else {
+            1.0
+        };
+        if let Ok(mut guard) = self.stream_volumes.lock() {
+            guard.insert(owner_identity, clamped);
+        }
+        self.refresh_track_gains();
+    }
+
+    fn set_watched_identities(&self, watched: HashSet<String>) {
+        if let Ok(mut guard) = self.watched_identities.lock() {
+            *guard = watched;
+        }
+        self.refresh_track_gains();
     }
 
     fn mix_into_stereo_interleaved(&self, out_stereo: &mut [f32]) {
@@ -81,33 +135,15 @@ impl MixerInner {
         let is_deafened = self.is_deafened.load(Ordering::Relaxed);
         let master_vol = f32::from_bits(self.master_volume_bits.load(Ordering::Relaxed));
 
-        let user_volumes = self
-            .user_volumes
-            .lock()
-            .map(|g| g.clone())
-            .unwrap_or_default();
-        let stream_volumes = self
-            .stream_volumes
-            .lock()
-            .map(|g| g.clone())
-            .unwrap_or_default();
-        let watched = self
-            .watched_identities
-            .lock()
-            .map(|g| g.clone())
-            .unwrap_or_default();
-
-        if let Ok(mut tracks) = self.tracks.lock() {
+        // Non-blocking try_lock with zero allocations inside the real-time cpal audio callback
+        if let Ok(mut tracks) = self.tracks.try_lock() {
             for entry in tracks.values_mut() {
-                let gain = Self::effective_gain_for_track(
-                    entry.is_screen_audio,
-                    &entry.owner_identity,
-                    is_deafened,
-                    master_vol,
-                    &user_volumes,
-                    &stream_volumes,
-                    &watched,
-                );
+                let gain = if is_deafened {
+                    0.0
+                } else {
+                    let track_gain = f32::from_bits(entry.track_gain_bits.load(Ordering::Relaxed));
+                    (track_gain * master_vol).max(0.0)
+                };
 
                 let available = entry.buffer.len().min(out_stereo.len());
                 if gain <= 0.0 {
@@ -298,6 +334,18 @@ impl AudioOutputMixer {
         is_screen_audio: bool,
         rtc_track: RtcAudioTrack,
     ) {
+        let initial_gain = {
+            let u = self.inner.user_volumes.lock().ok();
+            let s = self.inner.stream_volumes.lock().ok();
+            let w = self.inner.watched_identities.lock().ok();
+            match (u.as_deref(), s.as_deref(), w.as_deref()) {
+                (Some(uv), Some(sv), Some(wi)) => {
+                    MixerInner::resolve_track_gain(is_screen_audio, &owner_identity, uv, sv, wi)
+                }
+                _ => if is_screen_audio { 0.0 } else { 1.0 },
+            }
+        };
+
         let track_stop = Arc::new(AtomicBool::new(false));
         if let Ok(mut tracks) = self.inner.tracks.lock() {
             if let Some(prev) = tracks.remove(&sid) {
@@ -308,6 +356,7 @@ impl AudioOutputMixer {
                 TrackEntry {
                     owner_identity,
                     is_screen_audio,
+                    track_gain_bits: AtomicU32::new(initial_gain.to_bits()),
                     buffer: VecDeque::with_capacity(self.max_buffer_samples),
                     stop_flag: Arc::clone(&track_stop),
                 },
@@ -395,32 +444,16 @@ impl AudioOutputMixer {
 
     /// Per-participant microphone volume multiplier in [0.0, 2.0] (1.0 = 100%).
     pub fn set_user_volume(&self, identity: String, vol: f32) {
-        let clamped = if vol.is_finite() {
-            vol.clamp(0.0, 2.0)
-        } else {
-            1.0
-        };
-        if let Ok(mut guard) = self.inner.user_volumes.lock() {
-            guard.insert(identity, clamped);
-        }
+        self.inner.set_user_volume(identity, vol);
     }
 
     /// Per-participant screen share audio volume multiplier in [0.0, 2.0] (1.0 = 100%).
     pub fn set_stream_volume(&self, owner_identity: String, vol: f32) {
-        let clamped = if vol.is_finite() {
-            vol.clamp(0.0, 2.0)
-        } else {
-            1.0
-        };
-        if let Ok(mut guard) = self.inner.stream_volumes.lock() {
-            guard.insert(owner_identity, clamped);
-        }
+        self.inner.set_stream_volume(owner_identity, vol);
     }
 
     pub fn set_watched_identities(&self, watched: HashSet<String>) {
-        if let Ok(mut guard) = self.inner.watched_identities.lock() {
-            *guard = watched;
-        }
+        self.inner.set_watched_identities(watched);
     }
 }
 
@@ -535,12 +568,19 @@ mod tests {
         is_screen_audio: bool,
         samples: &[f32],
     ) {
+        let gain = {
+            let u = inner.user_volumes.lock().unwrap();
+            let s = inner.stream_volumes.lock().unwrap();
+            let w = inner.watched_identities.lock().unwrap();
+            MixerInner::resolve_track_gain(is_screen_audio, owner, &u, &s, &w)
+        };
         let mut tracks = inner.tracks.lock().unwrap();
         tracks.insert(
             sid.to_string(),
             TrackEntry {
                 owner_identity: owner.to_string(),
                 is_screen_audio,
+                track_gain_bits: AtomicU32::new(gain.to_bits()),
                 buffer: samples.iter().copied().collect(),
                 stop_flag: Arc::new(AtomicBool::new(false)),
             },
@@ -551,8 +591,8 @@ mod tests {
     fn mixing_applies_user_stream_master_deafen_and_watched_rules() {
         let inner = MixerInner::new();
         inner.master_volume_bits.store(0.5_f32.to_bits(), Ordering::Relaxed);
-        inner.user_volumes.lock().unwrap().insert("alice".to_string(), 1.5);
-        inner.stream_volumes.lock().unwrap().insert("bob".to_string(), 0.8);
+        inner.set_user_volume("alice".to_string(), 1.5);
+        inner.set_stream_volume("bob".to_string(), 0.8);
 
         // 1. Alice mic (0.4 * 1.5 * 0.5 = 0.3), Bob screen NOT watched (gain = 0.0)
         insert_test_track(&inner, "t1", "alice", false, &[0.4, 0.4]);
@@ -564,7 +604,9 @@ mod tests {
         assert!((out[0] - expected_alice).abs() < 1e-5, "got {}", out[0]);
 
         // 2. Watch Bob's stream -> Bob contributes 0.5 * 0.8 * 0.5 = 0.2 -> total 0.5
-        inner.watched_identities.lock().unwrap().insert("bob".to_string());
+        let mut watched = HashSet::new();
+        watched.insert("bob".to_string());
+        inner.set_watched_identities(watched);
         insert_test_track(&inner, "t1", "alice", false, &[0.4, 0.4]);
         insert_test_track(&inner, "t2", "bob", true, &[0.5, 0.5]);
         inner.mix_into_stereo_interleaved(&mut out);
@@ -578,6 +620,17 @@ mod tests {
         inner.mix_into_stereo_interleaved(&mut out);
         assert_eq!(out, [0.0, 0.0]);
         assert!(inner.tracks.lock().unwrap().get("t1").unwrap().buffer.is_empty());
+    }
+
+    #[test]
+    fn mixing_nonblocking_when_tracks_locked() {
+        let inner = MixerInner::new();
+        insert_test_track(&inner, "t1", "u1", false, &[0.5, 0.5]);
+        let _guard = inner.tracks.lock().unwrap();
+        let mut out = [0.9_f32; 2];
+        // Must not deadlock even while tracks mutex is held; outputs silence
+        inner.mix_into_stereo_interleaved(&mut out);
+        assert_eq!(out, [0.0, 0.0]);
     }
 
     #[test]

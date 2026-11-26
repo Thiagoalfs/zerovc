@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { User } from '../types';
-import { api, setCsrfToken, initDesktopProxyUrl } from '../lib/api';
+import { api, setCsrfToken, clearCsrfToken, initDesktopProxyUrl } from '../lib/api';
 
 async function persistDesktopToken(token: string | null): Promise<void> {
   if (typeof localStorage !== 'undefined') {
     localStorage.removeItem('token');
     localStorage.removeItem('zerovc_token');
   }
-  if (isTauri() || isElectron()) {
+  if (isTauri()) {
     try {
       await desktopBridge.setAuthToken(token);
     } catch {}
@@ -15,7 +15,7 @@ async function persistDesktopToken(token: string | null): Promise<void> {
 }
 import { socket } from '../lib/socket';
 import { livekit } from '../lib/livekit';
-import { isElectron, isTauri, desktopBridge } from '../lib/platform';
+import { isTauri, desktopBridge } from '../lib/platform';
 import { useVoiceStore } from './voiceStore';
 import { useCallStore } from './callStore';
 import { useGuildStore } from './guildStore';
@@ -25,6 +25,10 @@ import { useFriendStore } from './friendStore';
 import { deriveAccountVaultKey } from '../crypto/recovery';
 import { backupManager } from '../crypto/backupManager';
 import { megolmManager } from '../crypto/megolmSession';
+import { keyStore } from '../crypto/keyStore';
+import { deviceManager } from '../crypto/deviceManager';
+import { rosterManager } from '../crypto/rosterManager';
+import { keyRequestManager } from '../crypto/keyRequestManager';
 
 interface AuthState {
   user: User | null;
@@ -32,7 +36,7 @@ interface AuthState {
   isCheckingAuth: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, password: string, code?: string, turnstileToken?: string) => Promise<{ requires_2fa?: boolean; requires_verification?: boolean; email?: string } | void>;
+  login: (email: string, password: string, code?: string, turnstileToken?: string, twofaChallenge?: string) => Promise<{ requires_2fa?: boolean; twofa_challenge?: string; requires_verification?: boolean; email?: string } | void>;
   register: (username: string, email: string, password: string, turnstileToken?: string) => Promise<{ requires_verification?: boolean; email?: string } | void>;
   verifyEmail: (email: string, code: string) => Promise<void>;
   loginWithDesktopCode: (code: string) => Promise<void>;
@@ -158,20 +162,26 @@ export const hasPendingProfileField = (key: string): boolean => (pendingProfileC
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  token: isElectron() ? localStorage.getItem('token') || localStorage.getItem('zerovc_token') : null,
+  token: null,
   isCheckingAuth: true,
   isLoading: false,
   error: null,
 
   clearError: () => set({ error: null }),
 
-  login: async (email, password, code, turnstileToken) => {
+  login: async (email, password, code, turnstileToken, twofaChallenge) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await api.auth.login({ email, password, code, turnstile_token: turnstileToken });
+      const res = await api.auth.login({
+        email,
+        password,
+        code,
+        turnstile_token: turnstileToken,
+        twofa_challenge: twofaChallenge,
+      });
       if (res.requires_2fa) {
         set({ isLoading: false });
-        return { requires_2fa: true };
+        return { requires_2fa: true, twofa_challenge: res.twofa_challenge };
       }
       if (res.requires_verification) {
         set({ isLoading: false });
@@ -285,7 +295,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           setCsrfToken(res.user.csrf_token);
         }
         try {
-          const key = await backupManager.loadVaultKeyFromStore();
+          const key = await backupManager.loadVaultKeyFromStore(res.user.id);
           if (key) {
             backupManager.setVaultKey(key, res.user.id);
           }
@@ -304,11 +314,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     try {
       backupManager.clearVaultKey();
+      deviceManager.clear();
+      rosterManager.clear();
+      keyRequestManager.clear();
     } catch {}
     try {
       await api.auth.logout();
     } catch {}
     await persistDesktopToken(null);
+    clearCsrfToken();
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem('zerovc_device_id');
+        localStorage.removeItem('zerovc_csrf_token');
+      } catch {}
+    }
+    try {
+      await keyStore.clearAll();
+    } catch {}
     await cleanupAllStoresAndConnections();
     set({ user: null, token: null, isCheckingAuth: false, isLoading: false });
 
@@ -337,7 +360,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       if (user?.id) {
         try {
-          const key = await backupManager.loadVaultKeyFromStore();
+          const key = await backupManager.loadVaultKeyFromStore(user.id);
           if (key) {
             backupManager.setVaultKey(key, user.id);
             backupManager
@@ -357,13 +380,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           console.warn('[checkAuth] Failed to load vault key from store:', vaultErr);
         }
       }
-      const legacyToken =
-        !isTauri() && typeof localStorage !== 'undefined'
-          ? localStorage.getItem('token') || localStorage.getItem('zerovc_token')
-          : null;
-      if (legacyToken) {
-        await persistDesktopToken(legacyToken);
-      } else if (isTauri() && typeof localStorage !== 'undefined') {
+      if (typeof localStorage !== 'undefined') {
         localStorage.removeItem('token');
         localStorage.removeItem('zerovc_token');
       }
@@ -371,11 +388,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       megolmManager.syncAllUserRoomKeys().catch(() => {});
       megolmManager.syncAllLocalKeysToServer().catch(() => {});
       socket.connect();
-    } catch {
+    } catch (err: any) {
+      const status = err?.status;
+      const isUnauthorized = status === 401 || status === 403;
       try {
         backupManager.clearVaultKey();
       } catch {}
-      await persistDesktopToken(null);
+      if (isUnauthorized) {
+        await persistDesktopToken(null);
+      }
       await cleanupAllStoresAndConnections();
       set({ user: null, token: null, isCheckingAuth: false, isLoading: false });
     }

@@ -33,6 +33,7 @@ type E2EEHandler struct {
 	db        *database.DB
 	hub       *gateway.Hub
 	Debouncer *ChannelAudienceDebouncer
+	uploadDir string
 }
 
 func NewE2EEHandler(db *database.DB, hub *gateway.Hub) *E2EEHandler {
@@ -42,6 +43,21 @@ func NewE2EEHandler(db *database.DB, hub *gateway.Hub) *E2EEHandler {
 	}
 	h.Debouncer = NewChannelAudienceDebouncer(db, hub, 500*time.Millisecond, h.RecomputeAudience)
 	return h
+}
+
+// SetUploadDir configures the base assets directory for storing E2EE attachments.
+func (h *E2EEHandler) SetUploadDir(dir string) {
+	h.uploadDir = strings.TrimSpace(dir)
+}
+
+func (h *E2EEHandler) attachmentsDir() string {
+	if h.uploadDir != "" {
+		return filepath.Join(h.uploadDir, "e2ee_attachments")
+	}
+	if envDir := strings.TrimSpace(os.Getenv("UPLOAD_DIR")); envDir != "" {
+		return filepath.Join(envDir, "e2ee_attachments")
+	}
+	return filepath.Join("uploads", "e2ee_attachments")
 }
 
 // decodeKeyOrSig attempts to decode standard base64, raw base64, or hex representations.
@@ -146,6 +162,53 @@ func CanonicalJSONRosterSigningPayload(
 		version,
 	)
 	return []byte(res), nil
+}
+
+func extractRosterMemberIDs(membersRaw json.RawMessage) ([]uuid.UUID, error) {
+	trimmed := strings.TrimSpace(string(membersRaw))
+	if trimmed == "" || trimmed == "null" {
+		return nil, nil
+	}
+
+	var uids []uuid.UUID
+	if err := json.Unmarshal(membersRaw, &uids); err == nil {
+		for _, u := range uids {
+			if u == uuid.Nil {
+				return nil, errors.New("invalid member uuid")
+			}
+		}
+		return uids, nil
+	}
+
+	var anyList []any
+	if err := json.Unmarshal(membersRaw, &anyList); err != nil {
+		return nil, err
+	}
+
+	result := make([]uuid.UUID, 0, len(anyList))
+	for _, item := range anyList {
+		switch v := item.(type) {
+		case string:
+			u, err := uuid.Parse(v)
+			if err != nil || u == uuid.Nil {
+				return nil, errors.New("invalid member uuid")
+			}
+			result = append(result, u)
+		case map[string]any:
+			rawID, _ := v["user_id"].(string)
+			if rawID == "" {
+				rawID, _ = v["id"].(string)
+			}
+			u, err := uuid.Parse(rawID)
+			if err != nil || u == uuid.Nil {
+				return nil, errors.New("invalid member uuid")
+			}
+			result = append(result, u)
+		default:
+			return nil, errors.New("invalid member entry")
+		}
+	}
+	return result, nil
 }
 
 // isUserInMembersJSON checks if a user UUID is present in raw members JSON.
@@ -647,8 +710,43 @@ func (h *E2EEHandler) ReplenishOTKs(w http.ResponseWriter, r *http.Request) {
 }
 
 // ClaimKeys handles POST /api/e2ee/devices/keys/claim
+const (
+	maxE2EEBatchSize        = 100
+	maxToDevicePayloadBytes = 64 * 1024
+)
+
+func (h *E2EEHandler) usersShareConversation(ctx context.Context, userA, userB uuid.UUID) bool {
+	if userA == userB {
+		return true
+	}
+	if h.db == nil || h.db.Pool == nil {
+		return false
+	}
+	var shared bool
+	err := h.db.Pool.QueryRow(ctx, `
+		SELECT (
+			EXISTS (
+				SELECT 1 FROM guild_members gm1
+				INNER JOIN guild_members gm2 ON gm1.guild_id = gm2.guild_id
+				WHERE gm1.user_id = $1 AND gm2.user_id = $2
+			)
+			OR EXISTS (
+				SELECT 1 FROM dm_rooms
+				WHERE (user1_id = $1 AND user2_id = $2) OR (user1_id = $2 AND user2_id = $1)
+			)
+			OR EXISTS (
+				SELECT 1 FROM dm_group_members d1
+				INNER JOIN dm_group_members d2 ON d1.group_id = d2.group_id
+				WHERE d1.user_id = $1 AND d2.user_id = $2
+			)
+		)
+	`, userA, userB).Scan(&shared)
+	return err == nil && shared
+}
+
+// ClaimKeys atomically claims one unclaimed OTK per requested device ID (or falls back to fallback_key).
 func (h *E2EEHandler) ClaimKeys(w http.ResponseWriter, r *http.Request) {
-	_, ok := auth.GetUserIDFromContext(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
@@ -660,12 +758,40 @@ func (h *E2EEHandler) ClaimKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(req.DeviceIDs) == 0 {
+		http.Error(w, `{"error":"empty_device_ids"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.DeviceIDs) > maxE2EEBatchSize {
+		http.Error(w, `{"error":"too_many_devices"}`, http.StatusBadRequest)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
+	allowedUsers := map[uuid.UUID]bool{userID: true}
 	claimed := make(map[string]models.ClaimedKeyInfo)
 
 	for _, devID := range req.DeviceIDs {
+		var ownerID uuid.UUID
+		errOwner := h.db.Pool.QueryRow(ctx, `
+			SELECT user_id FROM e2ee_devices WHERE id = $1 AND revoked_at IS NULL
+		`, devID).Scan(&ownerID)
+		if errOwner != nil {
+			continue
+		}
+
+		allowed, seen := allowedUsers[ownerID]
+		if !seen {
+			allowed = h.usersShareConversation(ctx, userID, ownerID)
+			allowedUsers[ownerID] = allowed
+		}
+		if !allowed {
+			http.Error(w, `{"error":"forbidden: no shared conversation with target user"}`, http.StatusForbidden)
+			return
+		}
+
 		// Attempt to claim 1 unclaimed OTK atomically
 		var keyID, pubKey string
 		err := h.db.Pool.QueryRow(ctx, `
@@ -733,6 +859,20 @@ func (h *E2EEHandler) SendToDevice(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"empty_messages"}`, http.StatusBadRequest)
 		return
 	}
+	if len(req.Messages) > maxE2EEBatchSize {
+		http.Error(w, `{"error":"too_many_messages"}`, http.StatusBadRequest)
+		return
+	}
+	for _, m := range req.Messages {
+		if len(m.Payload) > maxToDevicePayloadBytes {
+			http.Error(w, `{"error":"payload_too_large"}`, http.StatusBadRequest)
+			return
+		}
+		if len(m.MsgType) > 64 {
+			http.Error(w, `{"error":"invalid_msg_type"}`, http.StatusBadRequest)
+			return
+		}
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
@@ -750,12 +890,31 @@ func (h *E2EEHandler) SendToDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	allowedUsers := map[uuid.UUID]bool{userID: true}
 	delivered := 0
 	queued := 0
 
 	for _, m := range req.Messages {
 		if m.RecipientDeviceID == uuid.Nil || m.Payload == "" {
 			continue
+		}
+
+		var recipientUserID uuid.UUID
+		errRecip := h.db.Pool.QueryRow(ctx, `
+			SELECT user_id FROM e2ee_devices WHERE id = $1 AND revoked_at IS NULL
+		`, m.RecipientDeviceID).Scan(&recipientUserID)
+		if errRecip != nil {
+			continue
+		}
+
+		allowed, seen := allowedUsers[recipientUserID]
+		if !seen {
+			allowed = h.usersShareConversation(ctx, userID, recipientUserID)
+			allowedUsers[recipientUserID] = allowed
+		}
+		if !allowed {
+			http.Error(w, `{"error":"forbidden: no shared conversation with recipient"}`, http.StatusForbidden)
+			return
 		}
 
 		senderID := defaultSenderDeviceID
@@ -954,17 +1113,29 @@ func (h *E2EEHandler) SubmitRoster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Verify signer authorization for conversation
+	rosterMembers, err := extractRosterMemberIDs(req.Members)
+	if err != nil {
+		http.Error(w, `{"error":"invalid_roster_members"}`, http.StatusBadRequest)
+		return
+	}
+
+	// 2. Verify signer authorization and member list for conversation
 	switch req.ConversationType {
 	case models.ConversationTypeDM:
-		var authorized bool
+		var user1ID, user2ID uuid.UUID
 		err = h.db.Pool.QueryRow(ctx, `
-			SELECT (user1_id = $1 OR user2_id = $1)
-			FROM dm_rooms WHERE id = $2
-		`, userID, req.ConversationID).Scan(&authorized)
-		if err != nil || !authorized {
+			SELECT user1_id, user2_id
+			FROM dm_rooms WHERE id = $1
+		`, req.ConversationID).Scan(&user1ID, &user2ID)
+		if err != nil || (user1ID != userID && user2ID != userID) {
 			http.Error(w, `{"error":"forbidden_dm_access"}`, http.StatusForbidden)
 			return
+		}
+		for _, mID := range rosterMembers {
+			if mID != user1ID && mID != user2ID {
+				http.Error(w, `{"error":"forbidden_roster_member"}`, http.StatusForbidden)
+				return
+			}
 		}
 
 	case models.ConversationTypeDMGroup:
@@ -979,6 +1150,27 @@ func (h *E2EEHandler) SubmitRoster(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"forbidden_group_access"}`, http.StatusForbidden)
 			return
 		}
+		if len(rosterMembers) > 0 {
+			rows, mErr := h.db.Pool.Query(ctx, "SELECT user_id FROM dm_group_members WHERE group_id = $1", req.ConversationID)
+			if mErr != nil {
+				http.Error(w, `{"error":"internal_error"}`, http.StatusInternalServerError)
+				return
+			}
+			allowedSet := make(map[uuid.UUID]bool)
+			for rows.Next() {
+				var uid uuid.UUID
+				if rows.Scan(&uid) == nil {
+					allowedSet[uid] = true
+				}
+			}
+			rows.Close()
+			for _, mID := range rosterMembers {
+				if !allowedSet[mID] {
+					http.Error(w, `{"error":"forbidden_roster_member"}`, http.StatusForbidden)
+					return
+				}
+			}
+		}
 
 	case models.ConversationTypeChannel:
 		var guildID uuid.UUID
@@ -988,13 +1180,34 @@ func (h *E2EEHandler) SubmitRoster(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var isMember bool
-		err = h.db.Pool.QueryRow(ctx, `
-			SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)
-		`, guildID, userID).Scan(&isMember)
-		if err != nil || !isMember {
+		canAccess, accessErr := canUserAccessChannel(ctx, h.db, guildID, req.ConversationID, userID)
+		if accessErr != nil || !canAccess {
 			http.Error(w, `{"error":"forbidden_channel_access"}`, http.StatusForbidden)
 			return
+		}
+
+		canManage, manageErr := canUserManageChannel(ctx, h.db, guildID, req.ConversationID, userID)
+		if manageErr != nil || !canManage {
+			http.Error(w, `{"error":"forbidden: manage_channels permission required"}`, http.StatusForbidden)
+			return
+		}
+
+		if len(rosterMembers) > 0 {
+			allowedUIDs, listErr := GetPrivateChannelAllowedUserIDs(ctx, h.db, guildID, req.ConversationID)
+			if listErr != nil {
+				http.Error(w, `{"error":"internal_error"}`, http.StatusInternalServerError)
+				return
+			}
+			allowedSet := make(map[uuid.UUID]bool, len(allowedUIDs))
+			for _, uid := range allowedUIDs {
+				allowedSet[uid] = true
+			}
+			for _, mID := range rosterMembers {
+				if !allowedSet[mID] {
+					http.Error(w, `{"error":"forbidden_roster_member"}`, http.StatusForbidden)
+					return
+				}
+			}
 		}
 	}
 
@@ -1536,11 +1749,40 @@ func (h *E2EEHandler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	convTypeStr := strings.TrimSpace(r.URL.Query().Get("conversation_type"))
+	if convTypeStr == "" {
+		convTypeStr = strings.TrimSpace(r.Header.Get("X-Conversation-Type"))
+	}
+	convIDStr := strings.TrimSpace(r.URL.Query().Get("conversation_id"))
+	if convIDStr == "" {
+		convIDStr = strings.TrimSpace(r.Header.Get("X-Conversation-ID"))
+	}
+
+	var convTypePtr *string
+	var convIDPtr *uuid.UUID
+	if convTypeStr != "" || convIDStr != "" {
+		convType := models.ConversationType(convTypeStr)
+		convID, err := uuid.Parse(convIDStr)
+		if !convType.IsValid() || err != nil || convID == uuid.Nil {
+			http.Error(w, `{"error":"invalid conversation_type or conversation_id"}`, http.StatusBadRequest)
+			return
+		}
+
+		if h.db != nil && h.db.Pool != nil {
+			if !h.userCanAccessTypedConversation(r.Context(), convType, convID, userID) {
+				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				return
+			}
+		}
+		convTypePtr = &convTypeStr
+		convIDPtr = &convID
+	}
+
 	// 50 MB limit
 	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
 
 	attachmentID := uuid.New()
-	uploadDir := filepath.Join("uploads", "e2ee_attachments")
+	uploadDir := h.attachmentsDir()
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		http.Error(w, `{"error":"failed to create upload directory"}`, http.StatusInternalServerError)
 		return
@@ -1561,9 +1803,9 @@ func (h *E2EEHandler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, err = h.db.Pool.Exec(r.Context(), `
-		INSERT INTO e2ee_attachments (id, uploader_id, file_size)
-		VALUES ($1, $2, $3)
-	`, attachmentID, userID, fileSize)
+		INSERT INTO e2ee_attachments (id, uploader_id, file_size, conversation_type, conversation_id)
+		VALUES ($1, $2, $3, $4, $5)
+	`, attachmentID, userID, fileSize, convTypePtr, convIDPtr)
 	if err != nil {
 		_ = os.Remove(filePath)
 		http.Error(w, `{"error":"failed to save attachment metadata"}`, http.StatusInternalServerError)
@@ -1595,12 +1837,15 @@ func (h *E2EEHandler) DownloadAttachment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	uploadDir := filepath.Join("uploads", "e2ee_attachments")
-	filePath := filepath.Join(uploadDir, attachmentID.String()+".bin")
-
+	filePath := filepath.Join(h.attachmentsDir(), attachmentID.String()+".bin")
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		http.Error(w, `{"error":"attachment not found"}`, http.StatusNotFound)
-		return
+		legacyPath := filepath.Join("uploads", "e2ee_attachments", attachmentID.String()+".bin")
+		if _, legErr := os.Stat(legacyPath); legErr == nil {
+			filePath = legacyPath
+		} else {
+			http.Error(w, `{"error":"attachment not found"}`, http.StatusNotFound)
+			return
+		}
 	}
 
 	if h.db != nil && h.db.Pool != nil {
@@ -1621,41 +1866,13 @@ func (h *E2EEHandler) DownloadAttachment(w http.ResponseWriter, r *http.Request)
 		}
 
 		if convType != nil && convID != nil && *convID != uuid.Nil {
-			switch *convType {
-			case "dm":
-				var isPart bool
-				_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM dm_rooms WHERE id = $1 AND (user1_id = $2 OR user2_id = $2))", *convID, userID).Scan(&isPart)
-				if !isPart && uploaderID != userID {
-					http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
-					return
-				}
-			case "dm_group":
-				var isMember bool
-				_ = h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM dm_group_members WHERE group_id = $1 AND user_id = $2)", *convID, userID).Scan(&isMember)
-				if !isMember && uploaderID != userID {
-					http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
-					return
-				}
-			case "channel":
-				var guildID uuid.UUID
-				if err := h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", *convID).Scan(&guildID); err == nil {
-					canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, *convID, userID)
-					if (err != nil || !canAccess) && uploaderID != userID {
-						http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
-						return
-					}
-				}
-			default:
-				if uploaderID != userID {
-					http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
-					return
-				}
-			}
-		} else {
-			if uploaderID != userID {
+			if uploaderID != userID && !h.userCanAccessTypedConversation(r.Context(), models.ConversationType(*convType), *convID, userID) {
 				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 				return
 			}
+		} else if uploaderID != userID {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
 		}
 	}
 
@@ -1696,6 +1913,7 @@ func (h *E2EEHandler) SubmitKeyRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. Audience validation: verify requester belongs to conversation
+	var channelGuildID uuid.UUID
 	switch req.ConversationType {
 	case models.ConversationTypeDM:
 		var isParticipant bool
@@ -1712,20 +1930,12 @@ func (h *E2EEHandler) SubmitKeyRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case models.ConversationTypeChannel:
-		var guildID uuid.UUID
-		var isPrivate bool
-		err := h.db.Pool.QueryRow(r.Context(), "SELECT guild_id, is_private FROM channels WHERE id = $1", req.ConversationID).Scan(&guildID, &isPrivate)
+		err := h.db.Pool.QueryRow(r.Context(), "SELECT guild_id FROM channels WHERE id = $1", req.ConversationID).Scan(&channelGuildID)
 		if err != nil {
 			http.Error(w, `{"error":"channel not found"}`, http.StatusNotFound)
 			return
 		}
-		var isMember bool
-		h.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)", guildID, userID).Scan(&isMember)
-		if !isMember {
-			http.Error(w, `{"error":"forbidden: not a member of guild"}`, http.StatusForbidden)
-			return
-		}
-		canAccess, err := canUserAccessChannel(r.Context(), h.db, guildID, req.ConversationID, userID)
+		canAccess, err := canUserAccessChannel(r.Context(), h.db, channelGuildID, req.ConversationID, userID)
 		if err != nil || !canAccess {
 			http.Error(w, `{"error":"forbidden: no access to channel"}`, http.StatusForbidden)
 			return
@@ -1773,20 +1983,21 @@ func (h *E2EEHandler) SubmitKeyRequest(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	case models.ConversationTypeChannel:
-		query := `
-			SELECT d.id
-			FROM e2ee_devices d
-			INNER JOIN channels c ON true
-			INNER JOIN guild_members gm ON gm.guild_id = c.guild_id AND gm.user_id = d.user_id
-			WHERE c.id = $1 AND d.revoked_at IS NULL AND d.id != $2
-		`
-		rows, err := h.db.Pool.Query(r.Context(), query, req.ConversationID, req.RequesterDeviceID)
-		if err == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var devID uuid.UUID
-				if err := rows.Scan(&devID); err == nil {
-					recipientDeviceIDs = append(recipientDeviceIDs, devID)
+		allowedUsers, errAllowed := GetPrivateChannelAllowedUserIDs(r.Context(), h.db, channelGuildID, req.ConversationID)
+		if errAllowed == nil && len(allowedUsers) > 0 {
+			query := `
+				SELECT d.id
+				FROM e2ee_devices d
+				WHERE d.user_id = ANY($1) AND d.revoked_at IS NULL AND d.id != $2
+			`
+			rows, err := h.db.Pool.Query(r.Context(), query, allowedUsers, req.RequesterDeviceID)
+			if err == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var devID uuid.UUID
+					if err := rows.Scan(&devID); err == nil {
+						recipientDeviceIDs = append(recipientDeviceIDs, devID)
+					}
 				}
 			}
 		}
@@ -1833,6 +2044,31 @@ func (h *E2EEHandler) SubmitKeyRequest(w http.ResponseWriter, r *http.Request) {
 // 7. E2EE Room Keys
 // ---------------------------------------------------------------------
 
+func (h *E2EEHandler) userCanAccessTypedConversation(ctx context.Context, convType models.ConversationType, convID, userID uuid.UUID) bool {
+	if h.db == nil || h.db.Pool == nil {
+		return false
+	}
+	switch convType {
+	case models.ConversationTypeDM:
+		var ok bool
+		_ = h.db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM dm_rooms WHERE id = $1 AND (user1_id = $2 OR user2_id = $2))", convID, userID).Scan(&ok)
+		return ok
+	case models.ConversationTypeDMGroup:
+		var ok bool
+		_ = h.db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM dm_group_members WHERE group_id = $1 AND user_id = $2)", convID, userID).Scan(&ok)
+		return ok
+	case models.ConversationTypeChannel:
+		var guildID uuid.UUID
+		if err := h.db.Pool.QueryRow(ctx, "SELECT guild_id FROM channels WHERE id = $1", convID).Scan(&guildID); err != nil {
+			return false
+		}
+		ok, err := canUserAccessChannel(ctx, h.db, guildID, convID, userID)
+		return err == nil && ok
+	default:
+		return false
+	}
+}
+
 func (h *E2EEHandler) verifyAndResolveConversationType(ctx context.Context, convID uuid.UUID, userID uuid.UUID) (string, bool) {
 	if h.db == nil || h.db.Pool == nil {
 		return "", false
@@ -1846,13 +2082,12 @@ func (h *E2EEHandler) verifyAndResolveConversationType(ctx context.Context, conv
 	if err := h.db.Pool.QueryRow(ctx, "SELECT 1 FROM dm_group_members WHERE group_id = $1 AND user_id = $2", convID, userID).Scan(&dummy); err == nil {
 		return string(models.ConversationTypeDMGroup), true
 	}
-	// Channel
-	if err := h.db.Pool.QueryRow(ctx, `
-		SELECT 1 FROM channels c
-		INNER JOIN guild_members gm ON gm.guild_id = c.guild_id
-		WHERE c.id = $1 AND gm.user_id = $2
-	`, convID, userID).Scan(&dummy); err == nil {
-		return string(models.ConversationTypeChannel), true
+	// Channel (enforces PermViewChannel + category/channel overwrites)
+	var guildID uuid.UUID
+	if err := h.db.Pool.QueryRow(ctx, "SELECT guild_id FROM channels WHERE id = $1", convID).Scan(&guildID); err == nil {
+		if canAccess, accessErr := canUserAccessChannel(ctx, h.db, guildID, convID, userID); accessErr == nil && canAccess {
+			return string(models.ConversationTypeChannel), true
+		}
 	}
 	return "", false
 }
@@ -1991,6 +2226,31 @@ func (h *E2EEHandler) GetMyRoomKeys(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
+	// Resolve accessible guild channels using canonical canUserAccessChannel (handles overwrites & private channels)
+	accessibleChannelIDs := make([]uuid.UUID, 0)
+	chRows, chErr := h.db.Pool.Query(ctx, `
+		SELECT c.id, c.guild_id
+		FROM channels c
+		INNER JOIN guild_members gm ON gm.guild_id = c.guild_id
+		WHERE gm.user_id = $1
+	`, userID)
+	if chErr == nil {
+		type chPair struct{ id, guildID uuid.UUID }
+		var pairs []chPair
+		for chRows.Next() {
+			var p chPair
+			if chRows.Scan(&p.id, &p.guildID) == nil {
+				pairs = append(pairs, p)
+			}
+		}
+		chRows.Close()
+		for _, p := range pairs {
+			if canAccess, err := canUserAccessChannel(ctx, h.db, p.guildID, p.id, userID); err == nil && canAccess {
+				accessibleChannelIDs = append(accessibleChannelIDs, p.id)
+			}
+		}
+	}
+
 	query := `
 		SELECT rk.id, rk.conversation_type, rk.conversation_id, rk.session_id, rk.session_key, rk.sender_device_id, rk.epoch, rk.created_by, rk.created_at
 		FROM e2ee_room_keys rk
@@ -2003,33 +2263,13 @@ func (h *E2EEHandler) GetMyRoomKeys(w http.ResponseWriter, r *http.Request) {
 				SELECT group_id FROM dm_group_members WHERE user_id = $1
 			)
 		) OR (
-			rk.conversation_type = 'channel' AND rk.conversation_id IN (
-				SELECT c.id FROM channels c
-				INNER JOIN guild_members gm ON gm.guild_id = c.guild_id
-				INNER JOIN guilds g ON g.id = c.guild_id
-				WHERE gm.user_id = $1 AND (
-					c.is_private = false OR (
-						g.owner_id = $1
-						OR EXISTS (
-							SELECT 1 FROM guild_roles gr
-							INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
-							WHERE gmr.guild_id = c.guild_id AND gmr.user_id = $1
-							  AND (gr.permissions & $2) != 0
-						)
-						OR EXISTS (
-							SELECT 1 FROM channel_role_access cra
-							INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
-							WHERE cra.channel_id = c.id AND gmr.guild_id = c.guild_id AND gmr.user_id = $1
-						)
-					)
-				)
-			)
+			rk.conversation_type = 'channel' AND rk.conversation_id = ANY($2)
 		)
 		ORDER BY rk.created_at ASC
 		LIMIT 500
 	`
 
-	rows, err := h.db.Pool.Query(ctx, query, userID, models.PermAdministrator)
+	rows, err := h.db.Pool.Query(ctx, query, userID, accessibleChannelIDs)
 	if err != nil {
 		log.Printf("[E2EE] Failed to query user room keys: %v", err)
 		http.Error(w, `{"error":"failed_to_get_room_keys"}`, http.StatusInternalServerError)
@@ -2091,35 +2331,7 @@ func (h *E2EEHandler) GetConversationRoomKeys(w http.ResponseWriter, r *http.Req
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	var authorized bool
-	err = h.db.Pool.QueryRow(ctx, `
-		SELECT EXISTS (
-			SELECT 1 FROM dm_rooms WHERE id = $1 AND (user1_id = $2 OR user2_id = $2)
-			UNION ALL
-			SELECT 1 FROM dm_group_members WHERE group_id = $1 AND user_id = $2
-			UNION ALL
-			SELECT 1 FROM channels c
-			INNER JOIN guild_members gm ON gm.guild_id = c.guild_id
-			INNER JOIN guilds g ON g.id = c.guild_id
-			WHERE c.id = $1 AND gm.user_id = $2 AND (
-				c.is_private = false OR (
-					g.owner_id = $2
-					OR EXISTS (
-						SELECT 1 FROM guild_roles gr
-						INNER JOIN guild_member_roles gmr ON gmr.role_id = gr.id
-						WHERE gmr.guild_id = c.guild_id AND gmr.user_id = $2
-						  AND (gr.permissions & $3) != 0
-					)
-					OR EXISTS (
-						SELECT 1 FROM channel_role_access cra
-						INNER JOIN guild_member_roles gmr ON gmr.role_id = cra.role_id
-						WHERE cra.channel_id = c.id AND gmr.guild_id = c.guild_id AND gmr.user_id = $2
-					)
-				)
-			)
-		)
-	`, convID, userID, models.PermAdministrator).Scan(&authorized)
-	if err != nil || !authorized {
+	if _, authorized := h.verifyAndResolveConversationType(ctx, convID, userID); !authorized {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}

@@ -1,4 +1,4 @@
-﻿name: CI Validation
+name: CI Validation
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.23'
           cache-dependency-path: backend/go.sum
 
       - name: Download Go dependencies
@@ -30,10 +30,41 @@ jobs:
           cd backend
           go vet ./...
 
+      - name: Run Go Tests
+        run: |
+          cd backend
+          go test -race ./...
+
       - name: Compile Backend
         run: |
           cd backend
           go build -v ./...
+
+  native-screenshare-check:
+    name: Native ScreenShare (Rust) Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            pkg-config \
+            libssl-dev \
+            libglib2.0-dev \
+            libva-dev \
+            libasound2-dev \
+            libv4l-dev
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run Cargo Tests
+        working-directory: client/native/native-screenshare
+        run: cargo test
 
   frontend-check:
     name: Frontend (React & TypeScript) Build

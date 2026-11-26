@@ -34,6 +34,8 @@ services:
       - livekit
     environment:
       PORT: "8080"
+      APP_ENV: "production"
+      UPLOAD_DIR: "/app/assets"
       DATABASE_URL: "${DATABASE_URL}"
       JWT_SECRET: "${JWT_SECRET}"
       LIVEKIT_URL: "ws://livekit:7880"
@@ -41,8 +43,11 @@ services:
       LIVEKIT_API_KEY: "${LIVEKIT_API_KEY}"
       LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET}"
       RAWG_API_KEY: "${RAWG_API_KEY}"
+      KLIPY_API_KEY: "${KLIPY_API_KEY}"
       TURNSTILE_SECRET_KEY: "${TURNSTILE_SECRET_KEY}"
       TURNSTILE_SITE_KEY: "${TURNSTILE_SITE_KEY}"
+    volumes:
+      - assets_data:/app/assets
     ports:
       - "${API_PORT:-8081}:8080"
     deploy:
@@ -53,3 +58,6 @@ services:
       nofile:
         soft: 65535
         hard: 65535
+
+volumes:
+  assets_data:
