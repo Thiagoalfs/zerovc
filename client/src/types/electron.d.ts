@@ -56,6 +56,7 @@ export interface ElectronAPI {
     fps: number;
     bitrate: number;
     includeAudio: boolean;
+    e2ee?: boolean;
     e2eeKey?: string;
   }) => Promise<{ success: boolean; error?: string }>;
   stopNativeScreenShare?: () => Promise<{ success: boolean }>;
