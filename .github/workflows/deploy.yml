@@ -32,7 +32,7 @@ jobs:
             git pull origin main
             LIVEKIT_CFG_CHANGED=$(git diff --name-only "$PREV_HEAD" HEAD -- deploy/livekit.yaml || true)
             echo "🔨 Compilando frontend web para atualizar backend/web..."
-            docker run --rm -v "$(pwd):/repo" -w /repo/client node:20-alpine sh -c "npm ci --no-audit --no-fund && npm run build"
+            docker run --rm -v "$(pwd):/repo" -v zerovc_npm_cache:/root/.npm -w /repo/client node:20-alpine sh -c "npm ci --no-audit --no-fund && npm run build"
 
             mkdir -p backend/web/downloads
             cp -f "$HOME/zerovc-downloads/"* backend/web/downloads/ 2>/dev/null || true
