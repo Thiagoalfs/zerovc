@@ -662,6 +662,86 @@ pub fn consume_desktop_auth_code(state: State<'_, AppState>) -> Option<String> {
         .and_then(|mut guard| guard.take())
 }
 
+#[tauri::command]
+pub async fn start_desktop_browser_login(
+    app: AppHandle,
+    mode: Option<String>,
+) -> Result<(), String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .map_err(|e| format!("Failed to bind desktop auth listener: {e}"))?;
+    let port = listener
+        .local_addr()
+        .map_err(|e| format!("Failed to read desktop auth port: {e}"))?
+        .port();
+
+    let callback_url = format!("http://127.0.0.1:{port}/auth-callback");
+    let mut target = Url::parse(&format!("{REMOTE_SERVER_URL}/desktop-auth"))
+        .map_err(|e| format!("Invalid server URL: {e}"))?;
+    {
+        let mut pairs = target.query_pairs_mut();
+        pairs.append_pair("callback", &callback_url);
+        if mode.as_deref() == Some("register") {
+            pairs.append_pair("mode", "register");
+        }
+    }
+
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(300);
+        loop {
+            let accept_res = tokio::time::timeout_at(deadline, listener.accept()).await;
+            let Ok(Ok((mut socket, _))) = accept_res else {
+                break;
+            };
+            let mut buf = [0u8; 8192];
+            let Ok(n) = socket.read(&mut buf).await else {
+                continue;
+            };
+            if n == 0 {
+                continue;
+            }
+            let req_text = String::from_utf8_lossy(&buf[..n]);
+            let first_line = req_text.lines().next().unwrap_or("");
+            let path = first_line.split_whitespace().nth(1).unwrap_or("/");
+            if path.starts_with("/favicon.ico") {
+                let _ = socket
+                    .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                    .await;
+                continue;
+            }
+
+            let parsed_code = Url::parse(&format!("http://127.0.0.1{path}"))
+                .ok()
+                .and_then(|u| {
+                    u.query_pairs()
+                        .find(|(k, _)| k == "code")
+                        .map(|(_, v)| v.into_owned())
+                })
+                .filter(|c| !c.trim().is_empty());
+
+            let resp = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok";
+            let _ = socket.write_all(resp.as_bytes()).await;
+            let _ = socket.shutdown().await;
+
+            if let Some(code) = parsed_code {
+                if let Some(state) = app_handle.try_state::<AppState>() {
+                    if let Ok(mut guard) = state.pending_desktop_auth_code.lock() {
+                        *guard = Some(code.clone());
+                    }
+                }
+                let _ = app_handle.emit("desktop-auth-code", code);
+                crate::tray::restore_and_focus_main(&app_handle);
+                break;
+            }
+        }
+    });
+
+    open_url_with_os(target.as_str())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

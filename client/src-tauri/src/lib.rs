@@ -366,6 +366,7 @@ pub fn run() {
             commands::start_turnstile_verification,
             commands::consume_turnstile_token,
             commands::consume_desktop_auth_code,
+            commands::start_desktop_browser_login,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ZeroVC Tauri application");

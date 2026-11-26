@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'motion/react';
 import { ExternalLink, Loader2, UserPlus, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
@@ -12,10 +12,12 @@ export const DesktopAuthScreen: React.FC = () => {
   const { loginWithDesktopCode, isLoading, error, clearError } = useAuthStore();
   const [waitingBrowser, setWaitingBrowser] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const handledCodesRef = useRef<Set<string>>(new Set());
 
   const handleExchangeCode = useCallback(
     async (code: string) => {
-      if (!code) return;
+      if (!code || handledCodesRef.current.has(code)) return;
+      handledCodesRef.current.add(code);
       setLocalError(null);
       clearError();
       setWaitingBrowser(false);
@@ -62,15 +64,20 @@ export const DesktopAuthScreen: React.FC = () => {
     };
   }, [handleExchangeCode]);
 
-  const openBrowserLogin = (mode: 'login' | 'register') => {
+  const openBrowserLogin = async (mode: 'login' | 'register') => {
     setLocalError(null);
     clearError();
     setWaitingBrowser(true);
-    const url =
-      mode === 'register'
-        ? `${REMOTE_ORIGIN}/desktop-auth?mode=register`
-        : `${REMOTE_ORIGIN}/desktop-auth`;
-    getDesktopAPI()?.openExternal?.(url);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('start_desktop_browser_login', { mode });
+    } catch {
+      const url =
+        mode === 'register'
+          ? `${REMOTE_ORIGIN}/desktop-auth?mode=register`
+          : `${REMOTE_ORIGIN}/desktop-auth`;
+      getDesktopAPI()?.openExternal?.(url);
+    }
   };
 
   const activeError = localError || error;

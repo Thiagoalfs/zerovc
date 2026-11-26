@@ -20,6 +20,20 @@ export const DesktopAuthWebBridge: React.FC<DesktopAuthWebBridgeProps> = ({
     setError(null);
     try {
       const { code } = await api.auth.createDesktopCode();
+      const params = new URLSearchParams(window.location.search);
+      const rawCallback = params.get('callback');
+      if (rawCallback) {
+        try {
+          const cbUrl = new URL(rawCallback);
+          if (
+            cbUrl.protocol === 'http:' &&
+            (cbUrl.hostname === '127.0.0.1' || cbUrl.hostname === 'localhost')
+          ) {
+            cbUrl.searchParams.set('code', code);
+            void fetch(cbUrl.toString(), { mode: 'no-cors' }).catch(() => {});
+          }
+        } catch {}
+      }
       const url = `zerovc://auth?code=${encodeURIComponent(code)}`;
       setDeepLinkUrl(url);
       window.location.href = url;

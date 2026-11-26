@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
-import { ShieldCheck, CheckCircle2, Loader2 } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, Loader2, ExternalLink } from 'lucide-react';
 import { isTauri } from '../../lib/platform';
 
 declare global {
@@ -111,6 +111,27 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
       };
     }, [siteKey, tauriMode]);
 
+    // Fallback: enquanto aguarda o retorno do navegador, faz polling leve em consume_turnstile_token
+    useEffect(() => {
+      if (!siteKey || !tauriMode || !tauriLaunching) return;
+      let cancelled = false;
+      const timer = setInterval(async () => {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const token = await invoke<string | null>('consume_turnstile_token');
+          if (!cancelled && token) {
+            setTauriToken(token);
+            setTauriLaunching(false);
+            onSuccessRef.current(token);
+          }
+        } catch {}
+      }, 400);
+      return () => {
+        cancelled = true;
+        clearInterval(timer);
+      };
+    }, [siteKey, tauriMode, tauriLaunching]);
+
     useEffect(() => {
       // Se não há site key configurada ou está no modo Tauri, não inicializa o script direto
       if (!siteKey || !containerRef.current || tauriMode) return;
@@ -206,11 +227,16 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
 
       if (tauriToken) {
         return (
-          <div className={`my-3 ${className}`}>
-            <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm">
-              <span className="flex items-center gap-2 font-medium">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                Verificação humana concluída
+          <div className={className}>
+            <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5">
+              Verificação de Segurança
+            </label>
+            <div className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm">
+              <span className="flex items-center gap-2.5 font-medium">
+                <span className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                </span>
+                <span>Verificação humana concluída</span>
               </span>
               <button
                 type="button"
@@ -218,7 +244,7 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
                   setTauriToken(null);
                   onExpireRef.current?.();
                 }}
-                className="text-xs text-emerald-300/80 hover:text-emerald-200 underline"
+                className="text-xs font-medium text-emerald-300/80 hover:text-emerald-200 hover:underline cursor-pointer"
               >
                 Refazer
               </button>
@@ -228,22 +254,34 @@ export const TurnstileWidget = forwardRef<TurnstileWidgetRef, TurnstileWidgetPro
       }
 
       return (
-        <div className={`my-3 ${className}`}>
+        <div className={className}>
+          <label className="block text-xs font-medium text-gray-300 uppercase mb-1.5">
+            Verificação de Segurança
+          </label>
           <button
             type="button"
             onClick={handleVerifyClick}
             disabled={tauriLaunching}
-            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-[#1e1f22] border border-white/10 hover:border-indigo-500/50 hover:bg-[#232428] text-gray-200 text-sm transition-colors disabled:opacity-60"
+            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-background-darker border border-white/10 hover:border-brand-500/60 focus:outline-none focus:border-brand-500 active:scale-[0.99] text-gray-100 text-sm transition-all disabled:opacity-60 cursor-pointer group"
           >
-            <span className="flex items-center gap-2.5 font-medium">
-              {tauriLaunching ? (
-                <Loader2 className="w-4 h-4 text-indigo-400 animate-spin shrink-0" />
-              ) : (
-                <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0" />
-              )}
-              {tauriLaunching ? 'Aguardando verificação no navegador...' : 'Verificar que você é humano'}
+            <span className="flex items-center gap-2.5 text-left">
+              <span className="w-7 h-7 rounded-lg bg-brand-500/15 border border-brand-500/25 flex items-center justify-center shrink-0">
+                {tauriLaunching ? (
+                  <Loader2 className="w-4 h-4 text-brand-400 animate-spin" />
+                ) : (
+                  <ShieldCheck className="w-4 h-4 text-brand-400" />
+                )}
+              </span>
+              <span className="flex flex-col">
+                <span className="font-medium text-gray-100 leading-tight">
+                  {tauriLaunching ? 'Aguardando navegador...' : 'Verificar que você é humano'}
+                </span>
+                <span className="text-[11px] text-gray-400 leading-tight mt-0.5">
+                  Cloudflare Turnstile
+                </span>
+              </span>
             </span>
-            <span className="text-[11px] text-gray-400">Cloudflare</span>
+            <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-brand-400 transition-colors shrink-0" />
           </button>
         </div>
       );
