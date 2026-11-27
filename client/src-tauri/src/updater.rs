@@ -9,9 +9,7 @@ use std::io::Read;
 #[cfg(any(target_os = "linux", test))]
 use std::path::Path;
 use std::sync::atomic::Ordering;
-use tauri::{AppHandle, Emitter, State};
-#[cfg(target_os = "linux")]
-use tauri::Manager;
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_updater::UpdaterExt;
 
 #[derive(Debug, Clone, Serialize)]
