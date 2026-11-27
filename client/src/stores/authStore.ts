@@ -10,7 +10,9 @@ async function persistDesktopToken(token: string | null): Promise<void> {
   if (isTauri()) {
     try {
       await desktopBridge.setAuthToken(token);
-    } catch {}
+    } catch (err) {
+      console.warn('[authStore] Failed to persist desktop token:', err);
+    }
   }
 }
 import { socket } from '../lib/socket';

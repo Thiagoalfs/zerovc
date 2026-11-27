@@ -2,6 +2,7 @@ use rustls::pki_types::ServerName;
 use rustls::ClientConfig;
 use rustls_platform_verifier::BuilderVerifierExt;
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -43,6 +44,7 @@ pub struct AuthVault {
     token: Arc<RwLock<Option<String>>>,
     proxy_secret: Arc<String>,
     proxy_addr: Arc<RwLock<Option<SocketAddr>>>,
+    fallback_path: Arc<RwLock<Option<PathBuf>>>,
 }
 
 impl AuthVault {
@@ -52,11 +54,34 @@ impl AuthVault {
             token: Arc::new(RwLock::new(initial_token)),
             proxy_secret: Arc::new(generate_session_secret()),
             proxy_addr: Arc::new(RwLock::new(None)),
+            fallback_path: Arc::new(RwLock::new(None)),
         }
     }
 
-    /// Updates the stored JWT in memory and OS keyring. Never returns the JWT to callers.
+    /// Configures the fallback token file path in `app_data_dir` and loads it if keyring had no token.
+    pub async fn init_storage(&self, app_data_dir: PathBuf) {
+        let path = app_data_dir.join("auth_token");
+        {
+            let mut guard = self.fallback_path.write().await;
+            *guard = Some(path.clone());
+        }
+        if self.token.read().await.is_some() {
+            return;
+        }
+        if let Some(loaded) = read_fallback_token(&path) {
+            let mut guard = self.token.write().await;
+            if guard.is_none() {
+                *guard = Some(loaded);
+            }
+        }
+    }
+
+    /// Updates the stored JWT in memory and OS keyring (or owner-only fallback file). Never returns the JWT to callers.
     pub async fn set_token(&self, token: Option<String>) -> Result<(), String> {
+        self.set_token_inner(token, true).await
+    }
+
+    async fn set_token_inner(&self, token: Option<String>, use_keyring: bool) -> Result<(), String> {
         let normalized = token
             .map(|t| t.trim().to_string())
             .filter(|t| !t.is_empty() && t != "cookie_session");
@@ -66,7 +91,50 @@ impl AuthVault {
             *guard = normalized.clone();
         }
 
-        save_keyring_token(normalized.as_deref())
+        let fallback = self.fallback_path.read().await.clone();
+        match normalized.as_deref() {
+            Some(t) => {
+                let keyring_res = if use_keyring {
+                    save_keyring_token(Some(t))
+                } else {
+                    Err("keyring disabled".to_string())
+                };
+                match keyring_res {
+                    Ok(()) => {
+                        if let Some(path) = fallback.as_deref() {
+                            let _ = delete_fallback_token(path);
+                        }
+                        Ok(())
+                    }
+                    Err(keyring_err) => {
+                        eprintln!("[AuthVault] Keyring unavailable ({keyring_err}); writing fallback token");
+                        let Some(path) = fallback.as_deref() else {
+                            return Err(keyring_err);
+                        };
+                        write_fallback_token(path, t)
+                            .map_err(|fb_err| format!("{keyring_err}; fallback failed: {fb_err}"))
+                    }
+                }
+            }
+            None => {
+                let keyring_res = if use_keyring {
+                    save_keyring_token(None)
+                } else {
+                    Ok(())
+                };
+                if let Some(path) = fallback.as_deref() {
+                    delete_fallback_token(path)?;
+                }
+                if let Err(e) = keyring_res {
+                    if fallback.is_some() {
+                        eprintln!("[AuthVault] Keyring delete warning ({e})");
+                    } else {
+                        return Err(e);
+                    }
+                }
+                Ok(())
+            }
+        }
     }
 
     pub fn proxy_secret(&self) -> &str {
@@ -190,6 +258,67 @@ fn save_keyring_token(token: Option<&str>) -> Result<(), String> {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(e) => Err(format!("Keyring delete error: {e}")),
         },
+    }
+}
+
+fn read_fallback_token(path: &Path) -> Option<String> {
+    let meta = std::fs::symlink_metadata(path).ok()?;
+    if meta.file_type().is_symlink() || !meta.is_file() {
+        return None;
+    }
+    let raw = std::fs::read_to_string(path).ok()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed == "cookie_session" {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
+fn write_fallback_token(path: &Path, token: &str) -> Result<(), String> {
+    if let Ok(meta) = std::fs::symlink_metadata(path) {
+        if meta.file_type().is_symlink() || !meta.is_file() {
+            return Err("Refusing to write token to symlink or non-regular file".to_string());
+        }
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create fallback dir: {e}"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700))
+                .map_err(|e| format!("Failed to set fallback dir permissions: {e}"))?;
+        }
+    }
+
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let mut file = opts
+        .open(path)
+        .map_err(|e| format!("Failed to open fallback token file: {e}"))?;
+    use std::io::Write;
+    file.write_all(token.as_bytes())
+        .map_err(|e| format!("Failed to write fallback token: {e}"))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| format!("Failed to set fallback token permissions: {e}"))?;
+    }
+    Ok(())
+}
+
+fn delete_fallback_token(path: &Path) -> Result<(), String> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("Failed to delete fallback token: {e}")),
     }
 }
 
@@ -719,6 +848,15 @@ fn find_double_crlf(buf: &[u8]) -> Option<usize> {
 mod tests {
     use super::*;
 
+    fn test_vault(token: Option<&str>) -> AuthVault {
+        AuthVault {
+            token: Arc::new(RwLock::new(token.map(str::to_string))),
+            proxy_secret: Arc::new("session-secret-test".to_string()),
+            proxy_addr: Arc::new(RwLock::new(None)),
+            fallback_path: Arc::new(RwLock::new(None)),
+        }
+    }
+
     #[test]
     fn test_secret_validation_constant_time() {
         assert!(constant_time_eq(b"abc123", b"abc123"));
@@ -766,11 +904,7 @@ mod tests {
             }
         });
 
-        let vault = AuthVault {
-            token: Arc::new(RwLock::new(Some("secret-jwt-token".to_string()))),
-            proxy_secret: Arc::new("session-secret-test".to_string()),
-            proxy_addr: Arc::new(RwLock::new(None)),
-        };
+        let vault = test_vault(Some("secret-jwt-token"));
         let proxy_addr = vault
             .start_proxy_with_default(Some(upstream_addr.to_string()))
             .await
@@ -858,11 +992,7 @@ mod tests {
         let mock_upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let upstream_addr = mock_upstream.local_addr().unwrap();
 
-        let vault = AuthVault {
-            token: Arc::new(RwLock::new(Some("secret-jwt-token".to_string()))),
-            proxy_secret: Arc::new("session-secret-test".to_string()),
-            proxy_addr: Arc::new(RwLock::new(None)),
-        };
+        let vault = test_vault(Some("secret-jwt-token"));
         let proxy_addr = vault
             .start_proxy_with_default(Some(upstream_addr.to_string()))
             .await
@@ -902,11 +1032,7 @@ mod tests {
             Some("https://zerovc.safiroko.xyz")
         ));
 
-        let vault = AuthVault {
-            token: Arc::new(RwLock::new(Some("secret-jwt-token".to_string()))),
-            proxy_secret: Arc::new("session-secret-test".to_string()),
-            proxy_addr: Arc::new(RwLock::new(None)),
-        };
+        let vault = test_vault(Some("secret-jwt-token"));
         let proxy_addr = vault
             .start_proxy_with_default(Some("https://zerovc.safiroko.xyz".to_string()))
             .await
@@ -949,11 +1075,7 @@ mod tests {
             }
         });
 
-        let vault = AuthVault {
-            token: Arc::new(RwLock::new(Some("jwt-via-path".to_string()))),
-            proxy_secret: Arc::new("path-secret-xyz".to_string()),
-            proxy_addr: Arc::new(RwLock::new(None)),
-        };
+        let vault = test_vault(Some("jwt-via-path"));
         vault
             .start_proxy_with_default(Some(upstream_addr.to_string()))
             .await
@@ -975,5 +1097,81 @@ mod tests {
         let mut resp = String::new();
         client.read_to_string(&mut resp).await.unwrap();
         assert!(resp.contains("PATH_OK"), "got: {resp}");
+    }
+
+    fn unique_temp_dir(label: &str) -> PathBuf {
+        let mut rng = [0u8; 8];
+        getrandom::getrandom(&mut rng).unwrap();
+        let suffix: String = rng.iter().map(|b| format!("{b:02x}")).collect();
+        std::env::temp_dir().join(format!("zerovc_{label}_{suffix}"))
+    }
+
+    #[test]
+    fn test_fallback_file_permissions_and_symlink_rejection() {
+        let dir = unique_temp_dir("fb_perms");
+        let token_path = dir.join("auth_token");
+
+        write_fallback_token(&token_path, "jwt-fallback-abc").unwrap();
+        assert_eq!(
+            read_fallback_token(&token_path).as_deref(),
+            Some("jwt-fallback-abc")
+        );
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let file_mode = std::fs::metadata(&token_path).unwrap().permissions().mode() & 0o777;
+            let dir_mode = std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
+            assert_eq!(file_mode, 0o600);
+            assert_eq!(dir_mode, 0o700);
+        }
+
+        delete_fallback_token(&token_path).unwrap();
+        delete_fallback_token(&token_path).unwrap();
+        assert!(read_fallback_token(&token_path).is_none());
+
+        #[cfg(unix)]
+        {
+            let target = dir.join("real_target");
+            std::fs::write(&target, "unrelated").unwrap();
+            std::os::unix::fs::symlink(&target, &token_path).unwrap();
+            assert!(write_fallback_token(&token_path, "evil").is_err());
+            assert!(read_fallback_token(&token_path).is_none());
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn test_init_storage_recovers_and_clears_fallback_token() {
+        let dir = unique_temp_dir("fb_recover");
+        let token_path = dir.join("auth_token");
+
+        let vault1 = test_vault(None);
+        vault1.init_storage(dir.clone()).await;
+        vault1
+            .set_token_inner(Some("  persisted-jwt-123  ".to_string()), false)
+            .await
+            .unwrap();
+        assert!(token_path.exists());
+
+        // Fresh AuthVault recovers the token during init_storage
+        let vault2 = test_vault(None);
+        vault2.init_storage(dir.clone()).await;
+        assert_eq!(
+            vault2.token.read().await.as_deref(),
+            Some("persisted-jwt-123")
+        );
+
+        // set_token(None) removes both in-memory token and fallback file
+        vault2.set_token_inner(None, false).await.unwrap();
+        assert!(!token_path.exists());
+        assert!(vault2.token.read().await.is_none());
+
+        let vault3 = test_vault(None);
+        vault3.init_storage(dir.clone()).await;
+        assert!(vault3.token.read().await.is_none());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

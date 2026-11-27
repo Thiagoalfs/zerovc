@@ -261,6 +261,9 @@ pub fn run() {
                     *guard = loaded_settings;
                 }
                 let vault = state.auth_vault.clone();
+                if let Ok(app_data_dir) = handle.path().app_data_dir() {
+                    tauri::async_runtime::block_on(vault.init_storage(app_data_dir));
+                }
                 if let Err(e) = tauri::async_runtime::block_on(
                     vault.start_proxy_with_default(Some(REMOTE_SERVER_URL.to_string())),
                 ) {
