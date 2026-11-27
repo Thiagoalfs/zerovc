@@ -159,12 +159,12 @@ func TestChallengerM4_LiveKitJWTCryptographicTamperResistance(t *testing.T) {
 		t.Fatalf("Expected 3 JWT parts, got %d", len(parts))
 	}
 
-	// Flip last character of signature
+	// Flip first character of signature (last char of a 43-char Base64URL SHA-256 has 2 unused padding bits)
 	tamperedSig := parts[2]
-	if tamperedSig[len(tamperedSig)-1] == 'A' {
-		tamperedSig = tamperedSig[:len(tamperedSig)-1] + "B"
+	if tamperedSig[0] == 'A' {
+		tamperedSig = "B" + tamperedSig[1:]
 	} else {
-		tamperedSig = tamperedSig[:len(tamperedSig)-1] + "A"
+		tamperedSig = "A" + tamperedSig[1:]
 	}
 	tamperedSigToken := parts[0] + "." + parts[1] + "." + tamperedSig
 
