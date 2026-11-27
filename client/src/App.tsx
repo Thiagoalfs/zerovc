@@ -27,8 +27,8 @@ import { AuthScreen } from './components/Auth/AuthScreen';
 import { DesktopAuthScreen } from './components/Auth/DesktopAuthScreen';
 import { DesktopAuthWebBridge } from './components/Auth/DesktopAuthWebBridge';
 import { isTauri } from './lib/platform';
-import { LandingPage } from './components/Landing/LandingPage';
-import { DownloadPage } from './components/Landing/DownloadPage';
+const LandingPage = React.lazy(() => import('./components/Landing/LandingPage').then(m => ({ default: m.LandingPage })));
+const DownloadPage = React.lazy(() => import('./components/Landing/DownloadPage').then(m => ({ default: m.DownloadPage })));
 const CreateServerModal = React.lazy(() => import('./components/Modals/CreateServerModal').then(m => ({ default: m.CreateServerModal })));
 const CreateDMGroupModal = React.lazy(() => import('./components/Modals/CreateDMGroupModal').then(m => ({ default: m.CreateDMGroupModal })));
 const CreateChannelModal = React.lazy(() => import('./components/Modals/CreateChannelModal').then(m => ({ default: m.CreateChannelModal })));
@@ -2127,7 +2127,9 @@ export const App: React.FC = () => {
     if (cleanRoute === 'download') {
       return (
         <div className="w-full h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest overscroll-contain">
-          <DownloadPage onNavigate={navigateTo} user={user} />
+          <React.Suspense fallback={null}>
+            <DownloadPage onNavigate={navigateTo} user={user} />
+          </React.Suspense>
         </div>
       );
     }
@@ -2156,7 +2158,9 @@ export const App: React.FC = () => {
     // Default Web Root (/): Landing Page
     return (
       <div className="w-full h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest overscroll-contain">
-        <LandingPage onNavigate={navigateTo} user={user} />
+        <React.Suspense fallback={null}>
+          <LandingPage onNavigate={navigateTo} user={user} />
+        </React.Suspense>
       </div>
     );
   }
@@ -2175,7 +2179,9 @@ export const App: React.FC = () => {
   if (!isElectron && !isCapacitor && cleanRoute === '') {
     return (
       <div className="w-full h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest overscroll-contain">
-        <LandingPage onNavigate={navigateTo} user={user} />
+        <React.Suspense fallback={null}>
+          <LandingPage onNavigate={navigateTo} user={user} />
+        </React.Suspense>
       </div>
     );
   }
@@ -2183,7 +2189,9 @@ export const App: React.FC = () => {
   if (cleanRoute === 'download') {
     return (
       <div className="w-full h-[100dvh] overflow-y-auto overflow-x-hidden flex flex-col bg-background-darkest overscroll-contain">
-        <DownloadPage onNavigate={navigateTo} user={user} />
+        <React.Suspense fallback={null}>
+          <DownloadPage onNavigate={navigateTo} user={user} />
+        </React.Suspense>
       </div>
     );
   }

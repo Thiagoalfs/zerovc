@@ -147,6 +147,9 @@ pub fn window_close(app: AppHandle, state: State<'_, AppState>) {
     if let Some(win) = app.get_webview_window("main") {
         if !is_quitting && minimize_to_tray {
             let _ = win.hide();
+            if !crate::is_in_voice_call(&state) {
+                crate::set_webview_memory_low(&win, true);
+            }
         } else {
             let _ = win.close();
         }

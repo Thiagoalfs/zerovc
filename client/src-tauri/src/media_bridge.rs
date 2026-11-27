@@ -115,6 +115,10 @@ impl MediaBridge {
         }
     }
 
+    pub fn is_connected_try(&self) -> bool {
+        self.inner.try_lock().map(|g| g.is_some()).unwrap_or(true)
+    }
+
     pub async fn connect(
         &self,
         app: AppHandle,

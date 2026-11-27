@@ -4,6 +4,7 @@ client/dist
 client/dist-electron
 client/release
 client/android
+client/target
 client/src-tauri/target
 client/electron/native-screenshare/target
 backend/assets

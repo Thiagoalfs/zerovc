@@ -395,7 +395,8 @@ export const useGuildStore = create<GuildState>((set, get) => ({
           channelLruOrder,
           channelId,
           combined,
-          curr.fetchedChannels
+          curr.fetchedChannels,
+          curr.activeChannel?.id
         );
         return {
           messages: curr.activeChannel?.id === channelId ? combined : curr.messages,
@@ -1087,9 +1088,9 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         updatedChannelMsgs.push({ ...message, status: 'sent' });
       }
 
-      // Cap memory at 200 messages per channel
-      if (updatedChannelMsgs.length > 200) {
-        updatedChannelMsgs = updatedChannelMsgs.slice(-200);
+      // Cap memory at 100 messages per channel
+      if (updatedChannelMsgs.length > 100) {
+        updatedChannelMsgs = updatedChannelMsgs.slice(-100);
       }
 
       const lru = setCachedMessagesLRU(
@@ -1097,7 +1098,8 @@ export const useGuildStore = create<GuildState>((set, get) => ({
         channelLruOrder,
         message.channel_id,
         updatedChannelMsgs,
-        state.fetchedChannels
+        state.fetchedChannels,
+        state.activeChannel?.id
       );
       const nextMessagesByChannel = lru.cache;
       const nextFetchedChannels = lru.fetched || state.fetchedChannels;
@@ -1137,8 +1139,8 @@ export const useGuildStore = create<GuildState>((set, get) => ({
           nextMessages.push({ ...message, status: 'sent' });
         }
 
-        if (nextMessages.length > 200) {
-          nextMessages = nextMessages.slice(-200);
+        if (nextMessages.length > 100) {
+          nextMessages = nextMessages.slice(-100);
         }
 
         const isViewingChannel = Boolean(

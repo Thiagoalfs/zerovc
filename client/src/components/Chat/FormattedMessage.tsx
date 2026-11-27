@@ -701,6 +701,8 @@ function renderInlineFormatting(
             key={k}
             src={formatAssetUrl(emojiUrl)}
             alt={`:${emojiName}:`}
+            loading="lazy"
+            decoding="async"
             draggable={false}
             className={`${
               isJumboji ? 'h-12 w-12 inline-block' : 'h-6 w-6 inline-block'
@@ -719,6 +721,8 @@ function renderInlineFormatting(
             key={k}
             src={formatAssetUrl(customEmoji.image_url)}
             alt={`:${customEmoji.name}:`}
+            loading="lazy"
+            decoding="async"
             draggable={false}
             className={`${
               isJumboji ? 'h-12 w-12 inline-block' : 'h-6 w-6 inline-block'

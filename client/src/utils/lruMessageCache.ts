@@ -1,8 +1,9 @@
-const MAX_CACHED_CONVERSATIONS = 25;
+const MAX_CACHED_CONVERSATIONS = 8;
 
 /**
  * Updates a conversation message cache map and evicts the least-recently-used
- * entries beyond maxEntries (default 25), optionally pruning fetched-flags.
+ * entries beyond maxEntries (default 8), never evicting the updated or active key,
+ * and pruning matching fetched-flags so evicted conversations refetch cleanly.
  */
 export function setCachedMessagesLRU<T>(
   cache: Record<string, T[]>,
@@ -10,31 +11,29 @@ export function setCachedMessagesLRU<T>(
   key: string,
   messages: T[],
   fetchedMap?: Record<string, boolean>,
+  activeKey?: string | null,
   maxEntries: number = MAX_CACHED_CONVERSATIONS
 ): { cache: Record<string, T[]>; fetched?: Record<string, boolean> } {
   touchLruKey(lruOrder, key);
 
   const nextCache: Record<string, T[]> = { ...cache, [key]: messages };
   let nextFetched = fetchedMap;
+  const isProtected = (k: string) => k === key || (Boolean(activeKey) && k === activeKey);
 
-  while (Object.keys(nextCache).length > maxEntries && lruOrder.length > 0) {
-    const oldest = lruOrder.shift()!;
-    if (oldest === key) {
-      lruOrder.push(oldest);
-      break;
-    }
-    if (oldest in nextCache) {
-      delete nextCache[oldest];
-      if (nextFetched && oldest in nextFetched) {
-        if (nextFetched === fetchedMap) nextFetched = { ...fetchedMap };
-        delete nextFetched[oldest];
-      }
+  while (Object.keys(nextCache).length > maxEntries) {
+    const evictIdx = lruOrder.findIndex((k) => !isProtected(k) && k in nextCache);
+    if (evictIdx === -1) break;
+    const [oldest] = lruOrder.splice(evictIdx, 1);
+    delete nextCache[oldest];
+    if (nextFetched && oldest in nextFetched) {
+      if (nextFetched === fetchedMap) nextFetched = { ...fetchedMap };
+      delete nextFetched[oldest];
     }
   }
 
   for (const k of Object.keys(nextCache)) {
     if (Object.keys(nextCache).length <= maxEntries) break;
-    if (k !== key) {
+    if (!isProtected(k)) {
       delete nextCache[k];
       if (nextFetched && k in nextFetched) {
         if (nextFetched === fetchedMap) nextFetched = { ...fetchedMap };

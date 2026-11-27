@@ -281,7 +281,8 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
           groupLruOrder,
           groupId,
           combined,
-          curr.fetchedGroups
+          curr.fetchedGroups,
+          curr.activeGroup?.id
         );
         return {
           messages: curr.activeGroup?.id === groupId ? combined : curr.messages,
@@ -690,7 +691,7 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
           });
         }
 
-        return next.length > 200 ? next.slice(-200) : next;
+        return next.length > 100 ? next.slice(-100) : next;
       };
 
       const groupMsgs = state.messagesByGroup[message.group_id] || [];
@@ -701,7 +702,8 @@ export const useDMGroupStore = create<DMGroupState>((set, get) => ({
         groupLruOrder,
         message.group_id,
         updatedGroupMsgs,
-        state.fetchedGroups
+        state.fetchedGroups,
+        state.activeGroup?.id
       );
       const nextMessagesByGroup = lru.cache;
       const nextFetchedGroups = lru.fetched || state.fetchedGroups;

@@ -248,7 +248,8 @@ export const useDMStore = create<DMState>((set, get) => ({
           roomLruOrder,
           roomId,
           combined,
-          curr.fetchedRooms
+          curr.fetchedRooms,
+          curr.activeRoom?.id
         );
         return {
           messages: curr.activeRoom?.id === roomId ? combined : curr.messages,
@@ -631,7 +632,7 @@ export const useDMStore = create<DMState>((set, get) => ({
           });
         }
 
-        return next.length > 200 ? next.slice(-200) : next;
+        return next.length > 100 ? next.slice(-100) : next;
       };
 
       const roomMsgs = state.messagesByRoom[message.dm_room_id] || [];
@@ -642,7 +643,8 @@ export const useDMStore = create<DMState>((set, get) => ({
         roomLruOrder,
         message.dm_room_id,
         updatedRoomMsgs,
-        state.fetchedRooms
+        state.fetchedRooms,
+        state.activeRoom?.id
       );
       const nextMessagesByRoom = lru.cache;
       const nextFetchedRooms = lru.fetched || state.fetchedRooms;

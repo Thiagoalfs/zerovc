@@ -112,6 +112,8 @@ export const LinkEmbed: React.FC<LinkEmbedProps> = ({ url, onPreviewImage, class
               <img
                 src={metadata.favicon}
                 alt=""
+                loading="lazy"
+                decoding="async"
                 className="w-3.5 h-3.5 rounded-sm object-contain flex-shrink-0"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
@@ -181,6 +183,8 @@ export const LinkEmbed: React.FC<LinkEmbedProps> = ({ url, onPreviewImage, class
           <img
             src={metadata.image_url}
             alt={metadata.title || 'Preview do link'}
+            loading="lazy"
+            decoding="async"
             className="w-full h-auto max-h-72 object-cover cursor-pointer hover:opacity-95 transition-opacity"
             onClick={(e) => {
               e.stopPropagation();

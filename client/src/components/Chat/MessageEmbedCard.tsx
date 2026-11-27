@@ -86,6 +86,8 @@ export const MessageEmbedCard: React.FC<MessageEmbedCardProps> = ({
             <img
               src={formatAssetUrl(embed.author.icon_url)}
               alt=""
+              loading="lazy"
+              decoding="async"
               className="w-5 h-5 rounded-full object-cover flex-shrink-0"
             />
           )}
@@ -165,6 +167,8 @@ export const MessageEmbedCard: React.FC<MessageEmbedCardProps> = ({
             <img
               src={formatAssetUrl(embed.thumbnail.url)}
               alt=""
+              loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover transition-transform group-hover/thumb:scale-105"
             />
           </div>
@@ -180,6 +184,8 @@ export const MessageEmbedCard: React.FC<MessageEmbedCardProps> = ({
           <img
             src={formatAssetUrl(embed.image.url)}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="max-h-[320px] sm:max-h-[360px] max-w-full w-auto h-auto object-contain block rounded-xl transition-transform group-hover/img:scale-[1.01]"
           />
         </div>
@@ -192,6 +198,8 @@ export const MessageEmbedCard: React.FC<MessageEmbedCardProps> = ({
             <img
               src={formatAssetUrl(embed.footer.icon_url)}
               alt=""
+              loading="lazy"
+              decoding="async"
               className="w-3.5 h-3.5 rounded-full object-cover"
             />
           )}

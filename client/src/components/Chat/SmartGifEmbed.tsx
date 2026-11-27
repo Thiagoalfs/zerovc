@@ -124,6 +124,7 @@ export const SmartGifEmbed: React.FC<SmartGifEmbedProps> = ({
             loop
             muted
             playsInline
+            preload="metadata"
             onLoadedData={() => onImageLoad?.()}
             className="max-h-[350px] max-w-full w-auto h-auto rounded-2xl block"
           />

@@ -180,6 +180,8 @@ pub fn resolve_screenshare_binary(app: &AppHandle) -> Option<PathBuf> {
     }
     candidates.push(PathBuf::from("native/bin").join(binary_name));
     candidates.push(PathBuf::from("../native/bin").join(binary_name));
+    candidates.push(PathBuf::from("../target/release").join(binary_name));
+    candidates.push(PathBuf::from("../target/debug").join(binary_name));
     candidates.push(
         PathBuf::from("../native/native-screenshare/target/release").join(binary_name),
     );

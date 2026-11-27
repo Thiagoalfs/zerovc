@@ -127,6 +127,7 @@ fn default_idle_icon() -> Result<Image<'static>, tauri::Error> {
 
 pub fn restore_and_focus_main(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
+        crate::set_webview_memory_low(&win, false);
         let _ = win.unminimize();
         let _ = win.show();
         let _ = win.set_focus();

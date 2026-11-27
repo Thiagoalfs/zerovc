@@ -16,6 +16,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Exclude workspace and Cargo from Windows Defender
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "${{ github.workspace }}", "$env:USERPROFILE\.cargo", "$env:TEMP" -ErrorAction SilentlyContinue
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -33,12 +38,20 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client
+          cache-on-failure: true
+
       - name: Build Native Rust ScreenShare Sidecar (Windows)
-        working-directory: client/native/native-screenshare
+        working-directory: client
+        env:
+          CARGO_INCREMENTAL: "0"
         run: |
-          cargo build --release
-          New-Item -ItemType Directory -Force -Path ..\bin | Out-Null
-          Copy-Item -Force target\release\zerovc-screenshare.exe ..\bin\zerovc-screenshare.exe
+          cargo build --release -p zerovc-screenshare
+          New-Item -ItemType Directory -Force -Path native\bin | Out-Null
+          Copy-Item -Force target\release\zerovc-screenshare.exe native\bin\zerovc-screenshare.exe
 
       - name: Build Native Audio Capture Sidecar (Windows)
         run: |
@@ -52,6 +65,7 @@ jobs:
       - name: Build Tauri Windows NSIS Installer
         working-directory: client
         env:
+          CARGO_INCREMENTAL: "0"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --bundles nsis
@@ -59,8 +73,8 @@ jobs:
       - name: Collect Windows Artifacts
         run: |
           New-Item -ItemType Directory -Force -Path release-out | Out-Null
-          $nsis = Get-ChildItem -Path client\src-tauri\target\release\bundle\nsis -Filter "*-setup.exe" | Select-Object -First 1
-          if (-not $nsis) { throw "Windows NSIS installer not found in client\src-tauri\target\release\bundle\nsis" }
+          $nsis = Get-ChildItem -Path client\target\release\bundle\nsis -Filter "*-setup.exe" | Select-Object -First 1
+          if (-not $nsis) { throw "Windows NSIS installer not found in client\target\release\bundle\nsis" }
           Copy-Item -Force $nsis.FullName release-out\ZeroVC-Setup.exe
           $sig = "$($nsis.FullName).sig"
           if (Test-Path $sig) {
@@ -120,16 +134,23 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client
+          cache-on-failure: true
+
       - name: Build Native Rust ScreenShare Sidecar (Linux)
-        working-directory: client/native/native-screenshare
+        working-directory: client
         env:
           CC: clang-21
           CXX: clang++-21
+          CARGO_INCREMENTAL: "0"
         run: |
-          cargo build --release
-          mkdir -p ../bin
-          cp -f target/release/zerovc-screenshare ../bin/zerovc-screenshare
-          chmod +x ../bin/zerovc-screenshare
+          cargo build --release -p zerovc-screenshare
+          mkdir -p native/bin
+          cp -f target/release/zerovc-screenshare native/bin/zerovc-screenshare
+          chmod +x native/bin/zerovc-screenshare
 
       - name: Build Frontend
         working-directory: client
@@ -140,6 +161,7 @@ jobs:
         env:
           CC: clang-21
           CXX: clang++-21
+          CARGO_INCREMENTAL: "0"
           APPIMAGE_EXTRACT_AND_RUN: 1
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -151,10 +173,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           mkdir -p release-out
-          DEB=$(find client/src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' | head -n 1)
-          RPM=$(find client/src-tauri/target/release/bundle/rpm -maxdepth 1 -name '*.rpm' | head -n 1)
-          PACMAN=$(find client/src-tauri/target/release/bundle -maxdepth 2 \( -name '*.pacman' -o -name '*.pkg.tar.*' \) | head -n 1 || true)
-          APPIMAGE=$(find client/src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -n 1)
+          DEB=$(find client/target/release/bundle/deb -maxdepth 1 -name '*.deb' | head -n 1)
+          RPM=$(find client/target/release/bundle/rpm -maxdepth 1 -name '*.rpm' | head -n 1)
+          PACMAN=$(find client/target/release/bundle -maxdepth 2 \( -name '*.pacman' -o -name '*.pkg.tar.*' \) | head -n 1 || true)
+          APPIMAGE=$(find client/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -n 1)
           [ -n "$DEB" ] && cp -f "$DEB" release-out/ZeroVC.deb
           [ -n "$RPM" ] && cp -f "$RPM" release-out/ZeroVC.rpm
           [ -n "$PACMAN" ] && cp -f "$PACMAN" release-out/ZeroVC.pacman

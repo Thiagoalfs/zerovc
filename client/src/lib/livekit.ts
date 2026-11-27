@@ -2300,8 +2300,8 @@ export const livekit = new LiveKitManager();
 
 /**
  * Global Zero-Latency Voice Engine Pre-warming
- * Pre-warms GPU detection, WebRTC ICE candidates, and Web Audio context
- * so that when the user enters a voice call for the first time, all engines are already hot.
+ * Pre-warms GPU detection and WebRTC ICE candidates in the background.
+ * AudioContext / RNNoise are initialized lazily on demand when joining a voice call.
  */
 export function prewarmVoiceEngine(): void {
   if (typeof window === 'undefined') return;
@@ -2313,14 +2313,4 @@ export function prewarmVoiceEngine(): void {
 
   // 2. Prewarm WebRTC STUN & ICE candidate pool
   livekit.prewarmWebRTC();
-
-  // 3. Prewarm Web Audio Engine on first interaction
-  const warmupAudio = () => {
-    void audioProcessor.prewarm();
-    livekit.prewarmAudio();
-    window.removeEventListener('pointerdown', warmupAudio);
-    window.removeEventListener('keydown', warmupAudio);
-  };
-  window.addEventListener('pointerdown', warmupAudio, { once: true, passive: true });
-  window.addEventListener('keydown', warmupAudio, { once: true, passive: true });
 }

@@ -78,6 +78,8 @@ export const GifEmbed: React.FC<GifEmbedProps> = ({
         ref={imgRef}
         src={activeSrc}
         alt={alt}
+        loading="lazy"
+        decoding="async"
         onLoad={() => onImageLoad?.()}
         onClick={(e) => {
           e.stopPropagation();

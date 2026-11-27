@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = [
+  "src-tauri",
+  "native/native-screenshare",
+]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true

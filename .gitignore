@@ -38,6 +38,7 @@ pgdata/
 *.tar.gz
 
 # Native Rust screenshare sidecar build artifacts
+client/target/
 client/native/native-screenshare/target/
 client/native/bin/zerovc-screenshare
 client/native/bin/zerovc-screenshare.exe

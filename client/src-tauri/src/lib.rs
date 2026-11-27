@@ -116,6 +116,42 @@ pub fn save_settings(app: &AppHandle, settings: &DesktopSettings) {
     }
 }
 
+#[cfg(target_os = "windows")]
+pub fn set_webview_memory_low(win: &tauri::WebviewWindow, low: bool) {
+    let _ = win.with_webview(move |platform_webview| {
+        use webview2_com::Microsoft::Web::WebView2::Win32::{
+            ICoreWebView2_19, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW,
+            COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL,
+        };
+        use windows_core::Interface;
+        unsafe {
+            if let Ok(wv) = platform_webview.controller().CoreWebView2() {
+                if let Ok(wv19) = wv.cast::<ICoreWebView2_19>() {
+                    let level = if low {
+                        COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW
+                    } else {
+                        COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL
+                    };
+                    let _ = wv19.SetMemoryUsageTargetLevel(level);
+                }
+            }
+        }
+    });
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn set_webview_memory_low(_win: &tauri::WebviewWindow, _low: bool) {}
+
+pub fn is_in_voice_call(state: &AppState) -> bool {
+    let tray_active = state
+        .tray_state
+        .current_voice_state
+        .try_lock()
+        .map(|s| *s != tray::TrayVoiceState::Idle)
+        .unwrap_or(true);
+    tray_active || state.media_bridge.is_connected_try()
+}
+
 fn handle_deep_link_url(app: &AppHandle, raw_url: &str) {
     if raw_url.starts_with("zerovc://auth") {
         if let Ok(parsed) = Url::parse(raw_url) {
@@ -146,6 +182,7 @@ fn handle_deep_link_url(app: &AppHandle, raw_url: &str) {
     };
     let dest = format!("{base}{target_path}");
     if let Some(win) = app.get_webview_window("main") {
+        set_webview_memory_low(&win, false);
         let _ = win.unminimize();
         let _ = win.show();
         let _ = win.set_focus();
@@ -244,6 +281,7 @@ pub fn run() {
         .plugin(nav_guard)
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(win) = app.get_webview_window("main") {
+                set_webview_memory_low(&win, false);
                 let _ = win.unminimize();
                 let _ = win.show();
                 let _ = win.set_focus();
@@ -370,6 +408,11 @@ pub fn run() {
                         if !is_quitting && minimize_to_tray {
                             api.prevent_close();
                             let _ = window.hide();
+                            if !is_in_voice_call(&state) {
+                                if let Some(wv) = window.app_handle().get_webview_window("main") {
+                                    set_webview_memory_low(&wv, true);
+                                }
+                            }
                         }
                     }
                 }
