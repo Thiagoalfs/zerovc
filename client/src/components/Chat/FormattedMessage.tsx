@@ -205,7 +205,7 @@ const SpoilerText: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 };
 
-export const FormattedMessage: React.FC<FormattedMessageProps> = ({
+const FormattedMessageImpl: React.FC<FormattedMessageProps> = ({
   content,
   className = '',
   textClassName = '',
@@ -215,12 +215,10 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
   onOpenUserProfile,
   onOpenUserContextMenu,
 }) => {
-  if (!content) return null;
-
-  const { isFavorited } = useFavoriteGifStore();
-  const { activeGuild, guilds, selectGuild, selectChannel } = useGuildStore();
-  const { joinVoice } = useVoiceStore();
-  const { user: currentUser } = useAuthStore();
+  useFavoriteGifStore((s) => s.favoriteGifs);
+  const activeGuild = useGuildStore((s) => s.activeGuild);
+  const guilds = useGuildStore((s) => s.guilds);
+  const currentUser = useAuthStore((s) => s.user);
   const [permissionAlert, setPermissionAlert] = useState<string | null>(null);
 
   const activeGuildChannels = activeGuild?.channels || [];
@@ -247,12 +245,16 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
     }
     return list;
   }, [activeGuild?.emojis, guilds]);
+
+  if (!content) return null;
+
   const guildMembers = activeGuild?.members || [];
   const guildRoles = activeGuild?.roles || [];
 
   const isJumboji = isPureEmojiMessage(content, guildEmojis);
 
   const navigateToTargetChannel = (channel: Channel, guild: Guild) => {
+    const { selectGuild, selectChannel } = useGuildStore.getState();
     if (activeGuild?.id !== guild.id) {
       selectGuild(guild.id, channel.id);
       window.dispatchEvent(
@@ -263,7 +265,7 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
     } else {
       selectChannel(channel);
       if (channel.type === 'voice') {
-        joinVoice(channel.id, guild.id);
+        useVoiceStore.getState().joinVoice(channel.id, guild.id);
       }
       window.dispatchEvent(
         new CustomEvent('navigate-channel', {
@@ -652,6 +654,8 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({
     </div>
   );
 };
+
+export const FormattedMessage = React.memo(FormattedMessageImpl);
 
 // Helper for inline tokens: Spoiler, Bold, Italic, Strikethrough, Inline Code, Custom Emojis, Shortcodes, Links, Mentions, Channels
 function renderInlineFormatting(

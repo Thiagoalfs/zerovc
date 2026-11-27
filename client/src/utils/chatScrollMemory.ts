@@ -18,9 +18,14 @@ export function shouldAutoScrollToBottom(chatKey: string): boolean {
   return !saved || saved.wasAtBottom;
 }
 
-export function restoreChatScrollPosition(chatKey: string, container: HTMLElement): void {
+export function restoreChatScrollPosition(chatKey: string, container: HTMLElement): () => void {
   const saved = savedChatScroll.get(chatKey);
+  let cancelled = false;
+  let rafId: number | null = null;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
   const apply = () => {
+    if (cancelled) return;
     if (!saved || saved.wasAtBottom) {
       container.scrollTop = container.scrollHeight;
     } else {
@@ -29,9 +34,15 @@ export function restoreChatScrollPosition(chatKey: string, container: HTMLElemen
   };
 
   apply();
-  requestAnimationFrame(apply);
+  rafId = requestAnimationFrame(apply);
   if (!saved || saved.wasAtBottom) {
     // Re-clamp to bottom once late images/markdown finish initial layout
-    setTimeout(apply, 80);
+    timeoutId = setTimeout(apply, 80);
   }
+
+  return () => {
+    cancelled = true;
+    if (rafId !== null) cancelAnimationFrame(rafId);
+    if (timeoutId !== null) clearTimeout(timeoutId);
+  };
 }

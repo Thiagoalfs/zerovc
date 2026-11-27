@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Pin, Search } from 'lucide-react';
 import { User } from '../../types';
 import { useAuthStore } from '../../stores/authStore';
@@ -13,6 +13,7 @@ import { smoothScrollToBottomExponential } from '../../utils/scrollUtils';
 import {
   saveChatScrollPosition,
   restoreChatScrollPosition,
+  shouldAutoScrollToBottom,
 } from '../../utils/chatScrollMemory';
 
 export interface ConversationViewProps {
@@ -121,12 +122,16 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef<number | null>(null);
   const isInitialLoadRef = useRef<boolean>(true);
   const prevKeyRef = useRef<string | null>(null);
   const isAutoScrollingRef = useRef<boolean>(false);
+  const cancelRestoreRef = useRef<(() => void) | null>(null);
+  const conversationKeyRef = useRef(conversationKey);
+  conversationKeyRef.current = conversationKey;
 
-  const scrollToBottom = (smooth = false) => {
+  const scrollToBottom = useCallback((smooth = false) => {
     const container = scrollContainerRef.current;
     if (!container) return;
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
@@ -135,30 +140,21 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     } else {
       container.scrollTop = container.scrollHeight;
     }
-  };
+  }, []);
 
   useEffect(() => {
     setReplyingTo(null);
     setEditingMessageId(null);
     onClearPinnedOnly();
     onClearSearch();
-    const container = scrollContainerRef.current;
-    return () => {
-      if (container && conversationKey && !isInitialLoadRef.current) {
-        saveChatScrollPosition(conversationKey, container);
-      }
-    };
   }, [conversationKey]);
 
   useEffect(() => {
-    if (conversationKey !== prevKeyRef.current) {
-      prevKeyRef.current = conversationKey;
-      isInitialLoadRef.current = true;
-      if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-      }
-    }
-  }, [conversationKey]);
+    return () => {
+      cancelRestoreRef.current?.();
+      cancelRestoreRef.current = null;
+    };
+  }, []);
 
   const firstUnreadIdRef = useRef(firstUnreadId);
   const onMarkAsReadRef = useRef(onMarkAsRead);
@@ -176,6 +172,14 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
   }, [conversationKey]);
 
   useLayoutEffect(() => {
+    if (conversationKey !== prevKeyRef.current) {
+      prevKeyRef.current = conversationKey;
+      isInitialLoadRef.current = true;
+      prevScrollHeightRef.current = null;
+      cancelRestoreRef.current?.();
+      cancelRestoreRef.current = null;
+    }
+
     const container = scrollContainerRef.current;
     if (!container) return;
 
@@ -189,9 +193,10 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     }
 
     if (isInitialLoadRef.current) {
-      if (messages.length > 0) {
+      if (!isLoadingMessages && messages.length > 0) {
         isInitialLoadRef.current = false;
-        restoreChatScrollPosition(conversationKey, container);
+        cancelRestoreRef.current?.();
+        cancelRestoreRef.current = restoreChatScrollPosition(conversationKey, container);
       }
       return;
     }
@@ -207,22 +212,39 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
     if ((isNearBottom || isMyMessage) && !isAutoScrollingRef.current) {
       scrollToBottom(true);
     }
-  }, [conversationKey, messages, user?.id, firstUnreadId]);
+  }, [conversationKey, messages, isLoadingMessages, user?.id, firstUnreadId]);
 
-  const handleMediaLoad = () => {
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    const content = contentRef.current;
+    if (!container || !content || typeof ResizeObserver === 'undefined') return;
+
+    // Keep pinned to bottom when async embeds, link previews, E2EE decrypts, or viewport resizes change height
+    const observer = new ResizeObserver(() => {
+      if (isInitialLoadRef.current || prevScrollHeightRef.current !== null) return;
+      if (shouldAutoScrollToBottom(conversationKey)) {
+        container.scrollTop = container.scrollHeight;
+      }
+    });
+    observer.observe(content);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [conversationKey]);
+
+  const handleMediaLoad = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 400;
-    if (isNearBottom) {
-      scrollToBottom(true);
+    if (isNearBottom || shouldAutoScrollToBottom(conversationKeyRef.current)) {
+      scrollToBottom(false);
     }
-  };
+  }, [scrollToBottom]);
 
   const handleScroll = () => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    if (!isInitialLoadRef.current) {
+    if (!isInitialLoadRef.current && !isLoadingMessages) {
       saveChatScrollPosition(conversationKey, container);
     }
 
@@ -313,6 +335,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
             style={{ overflowAnchor: 'none' }}
             className="flex-1 overflow-y-auto px-2 md:px-4 py-3 chat-scrollbar"
           >
+            <div ref={contentRef}>
             {isLoadingMoreMessages && (
               <div className="flex justify-center items-center gap-2 py-3 text-xs text-gray-400">
                 <div className="w-3.5 h-3.5 border-2 border-brand-400 border-t-transparent rounded-full animate-spin" />
@@ -416,6 +439,7 @@ export const ConversationView: React.FC<ConversationViewProps> = ({
             )}
 
             <div ref={messagesEndRef} />
+            </div>
           </div>
 
           <TypingIndicator typingUserIds={typingUserIds} members={typingMembers} />

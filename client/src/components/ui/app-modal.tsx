@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ModalButton, ModalButtonProps } from '@/components/ui/modal-button';
@@ -52,7 +53,7 @@ export const AppModal: React.FC<AppModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  const modal = (
     <div
       className={cn(MODAL_BACKDROP_CLASS, backdropClassName)}
       style={zIndex !== undefined ? { zIndex } : undefined}
@@ -77,6 +78,8 @@ export const AppModal: React.FC<AppModalProps> = ({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal;
 };
 
 export interface AppModalHeaderProps {

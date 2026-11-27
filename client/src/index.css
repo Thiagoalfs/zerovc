@@ -119,6 +119,11 @@
   line-height: 1.45 !important;
 }
 
+.chat-msg-cv {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 56px;
+}
+
 /* Accessibility Suite: Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { formatTime, formatDateShort, isToday, isYesterday, isTomorrow } from '../../utils/date';
 import {
   Pencil,
@@ -103,7 +103,7 @@ interface MessageItemProps {
 
 const QUICK_EMOJIS = ['👍', '❤️', '🔥', '😂', '🎉', '👀', '✨', '💀'];
 
-export const MessageItem: React.FC<MessageItemProps> = ({
+const MessageItemImpl: React.FC<MessageItemProps> = ({
   message,
   isCompact = false,
   isEditing: propIsEditing,
@@ -122,25 +122,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   onRemoveFailedMessage,
   contextType = 'channel',
 }) => {
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   useStreamerModeStore((s) => s.enabled && s.censorUsernames);
-  const {
-    activeGuild,
-    activeChannel,
-    editMessage: guildEditMessage,
-    deleteMessage: guildDeleteMessage,
-    toggleReaction: guildToggleReaction,
-    togglePin: guildTogglePin,
-    kickMember,
-    banMember,
-    muteMember,
-    assignRole,
-    removeRole,
-    sendMessage: guildSendMessage,
-    removeMessageFromStore: guildRemoveMessage,
-  } = useGuildStore();
-  const { openDMWithUser } = useDMStore();
-  const { isFavorited, toggleFavorite } = useFavoriteGifStore();
+  const activeGuild = useGuildStore((s) => s.activeGuild);
+  const activeChannel = useGuildStore((s) => s.activeChannel);
+  useFavoriteGifStore((s) => s.favoriteGifs);
   const { menu, openContextMenu, closeContextMenu, handleUserContextMenu: openUserMenu } = useUserContextMenu();
   const guildPerms = useGuildPermissions(contextType === 'channel' ? activeGuild : null);
   const chatDensity = useSettingsStore((s) => s.chatDensity);
@@ -168,8 +154,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     if (onRetryMessage) {
       await onRetryMessage(message);
     } else {
-      guildRemoveMessage(message.id);
-      await guildSendMessage(message.content, message.reply_to_id);
+      const { removeMessageFromStore, sendMessage } = useGuildStore.getState();
+      removeMessageFromStore(message.id);
+      await sendMessage(message.content, message.reply_to_id);
     }
   };
 
@@ -177,7 +164,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     if (onRemoveFailedMessage) {
       onRemoveFailedMessage(message.id);
     } else {
-      guildRemoveMessage(message.id);
+      useGuildStore.getState().removeMessageFromStore(message.id);
     }
   };
 
@@ -185,7 +172,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     if (onEditMessage) {
       await onEditMessage(msgId, newContent);
     } else {
-      await guildEditMessage(msgId, newContent);
+      await useGuildStore.getState().editMessage(msgId, newContent);
     }
   };
 
@@ -193,7 +180,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     if (onDeleteMessage) {
       await onDeleteMessage(msgId);
     } else {
-      await guildDeleteMessage(msgId);
+      await useGuildStore.getState().deleteMessage(msgId);
     }
   };
 
@@ -201,7 +188,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     if (onToggleReaction) {
       await onToggleReaction(msgId, emoji);
     } else {
-      await guildToggleReaction(msgId, emoji);
+      await useGuildStore.getState().toggleReaction(msgId, emoji);
     }
   };
 
@@ -209,7 +196,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     if (onTogglePin) {
       await onTogglePin(msgId);
     } else {
-      await guildTogglePin(msgId);
+      await useGuildStore.getState().togglePin(msgId);
     }
   };
 
@@ -326,14 +313,17 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     }
   };
 
-  const handleUserContextMenu = (e: React.MouseEvent, targetUser: User) => {
-    openUserMenu(e, targetUser, {
-      onOpenUserProfile,
-      onOpenDM,
-      contextType: contextType === 'channel' ? 'guild' : (contextType === 'dm_group' ? 'dm_group' : 'dm'),
-      groupId: contextType === 'dm_group' ? (message.group_id || message.dm_group_id) : undefined,
-    });
-  };
+  const handleUserContextMenu = useCallback(
+    (e: React.MouseEvent, targetUser: User) => {
+      openUserMenu(e, targetUser, {
+        onOpenUserProfile,
+        onOpenDM,
+        contextType: contextType === 'channel' ? 'guild' : (contextType === 'dm_group' ? 'dm_group' : 'dm'),
+        groupId: contextType === 'dm_group' ? (message.group_id || message.dm_group_id) : undefined,
+      });
+    },
+    [openUserMenu, onOpenUserProfile, onOpenDM, contextType, message.group_id, message.dm_group_id]
+  );
 
   const handleMessageContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -499,7 +489,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                   fullSrc.includes('giphy') ||
                   fullSrc.includes('tenor');
 
-                const favorited = isFavorited(fullSrc);
+                const favorited = useFavoriteGifStore.getState().isFavorited(fullSrc);
 
                 return (
                   <GifEmbed
@@ -695,6 +685,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           transition: isSwiping ? 'none' : 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
         className={`relative flex flex-col px-3 md:px-4 group rounded transition-colors duration-150 select-text ${
+          !isEditing && !showEmojiPicker && !isDeleteModalOpen ? 'chat-msg-cv' : ''
+        } ${
           isFailed
             ? 'bg-red-500/10 hover:bg-red-500/15 border-l-2 border-red-500 text-red-200'
             : isMentioned
@@ -1248,3 +1240,17 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     </>
   );
 };
+
+function areMessageItemPropsEqual(
+  prev: MessageItemProps,
+  next: MessageItemProps
+): boolean {
+  return (
+    prev.message === next.message &&
+    prev.isCompact === next.isCompact &&
+    prev.isEditing === next.isEditing &&
+    prev.contextType === next.contextType
+  );
+}
+
+export const MessageItem = React.memo(MessageItemImpl, areMessageItemPropsEqual);

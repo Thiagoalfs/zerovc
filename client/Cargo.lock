@@ -8584,7 +8584,7 @@ dependencies = [
 
 [[package]]
 name = "zerovc"
-version = "1.1.12"
+version = "1.1.13"
 dependencies = [
  "base64 0.22.1",
  "cpal",

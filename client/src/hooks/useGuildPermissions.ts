@@ -30,8 +30,8 @@ export interface GuildPermissionsResult {
 }
 
 export function useGuildPermissions(customGuild?: Guild | null): GuildPermissionsResult {
-  const { user } = useAuthStore();
-  const { activeGuild } = useGuildStore();
+  const user = useAuthStore((s) => s.user);
+  const activeGuild = useGuildStore((s) => (customGuild !== undefined ? null : s.activeGuild));
   const guild = customGuild !== undefined ? customGuild : activeGuild;
 
   return useMemo(() => {

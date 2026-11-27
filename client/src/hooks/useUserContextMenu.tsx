@@ -46,18 +46,6 @@ export interface UserContextMenuOptions {
 }
 
 export function useUserContextMenu() {
-  const { user: currentUser } = useAuthStore();
-  const {
-    activeGuild,
-    assignRole,
-    removeRole,
-    muteMember,
-    kickMember,
-    banMember,
-  } = useGuildStore();
-  const { openDMWithUser } = useDMStore();
-  const { activeGroup, transferOwnership, removeMember: removeGroupMember } = useDMGroupStore();
-  const { friends, sendRequest } = useFriendStore();
   const { menu, openContextMenu, closeContextMenu } = useContextMenu();
   const perms = useGuildPermissions();
 
@@ -65,6 +53,12 @@ export function useUserContextMenu() {
     (e: React.MouseEvent, targetUser: User, options: UserContextMenuOptions = {}) => {
       e.preventDefault();
       e.stopPropagation();
+
+      const currentUser = useAuthStore.getState().user;
+      const { activeGuild, muteMember, kickMember, banMember } = useGuildStore.getState();
+      const { openDMWithUser } = useDMStore.getState();
+      const { activeGroup, transferOwnership, removeMember: removeGroupMember } = useDMGroupStore.getState();
+      const { friends, sendRequest } = useFriendStore.getState();
 
       const isMe =
         Boolean(options.isMe) ||
@@ -481,7 +475,7 @@ export function useUserContextMenu() {
 
       openContextMenu(e, items, `@${targetUser.username}`);
     },
-    [currentUser, activeGuild, activeGroup, transferOwnership, removeGroupMember, openDMWithUser, perms, assignRole, removeRole, muteMember, kickMember, banMember, openContextMenu, friends, sendRequest]
+    [perms, openContextMenu]
   );
 
   return {

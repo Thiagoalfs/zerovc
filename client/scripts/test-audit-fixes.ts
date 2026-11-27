@@ -45,6 +45,11 @@ async function run() {
   const { useAuthStore } = await import('../src/stores/authStore');
   const { useGuildStore } = await import('../src/stores/guildStore');
   const { resetDesktopBridgeCacheForTests } = await import('../src/lib/desktopBridge');
+  const {
+    saveChatScrollPosition,
+    shouldAutoScrollToBottom,
+    restoreChatScrollPosition,
+  } = await import('../src/utils/chatScrollMemory');
 
   // --- #3: KeyStore strips plaintext sessionKey from extraFields ---
   await keyStore.encryptAndStorePickle('megolm_inbound', 'sess-strip-test', 'dummy-pickle', {
@@ -202,7 +207,60 @@ async function run() {
   useGuildStore.getState().setTyping('ch-typing', 'u-1');
   assert.equal(useGuildStore.getState().typingUsers.get('ch-typing')?.has('u-1'), true, 'User should be marked typing');
 
-  console.log('PASS: All audit fix unit tests (#3, #12, #13, #38) passed.');
+  // --- Chat scroll memory & restore cleanup cancellation ---
+  const origRaf = (globalThis as any).requestAnimationFrame;
+  const origCancelRaf = (globalThis as any).cancelAnimationFrame;
+  const rafQueue = new Map<number, FrameRequestCallback>();
+  let nextRafId = 1;
+  const cancelledRafIds: number[] = [];
+  (globalThis as any).requestAnimationFrame = (cb: FrameRequestCallback) => {
+    const id = nextRafId++;
+    rafQueue.set(id, cb);
+    return id;
+  };
+  (globalThis as any).cancelAnimationFrame = (id: number) => {
+    cancelledRafIds.push(id);
+    rafQueue.delete(id);
+  };
+
+  try {
+    assert.equal(shouldAutoScrollToBottom('ch-unseen'), true, 'Unseen channel should auto-scroll to bottom');
+
+    const containerAtTop = { scrollTop: 120, scrollHeight: 1000, clientHeight: 400 } as unknown as HTMLElement;
+    saveChatScrollPosition('ch-scrolled-up', containerAtTop);
+    assert.equal(shouldAutoScrollToBottom('ch-scrolled-up'), false, 'Scrolled-up channel should not auto-scroll');
+
+    const containerBottom = { scrollTop: 580, scrollHeight: 1000, clientHeight: 400 } as unknown as HTMLElement;
+    saveChatScrollPosition('ch-at-bottom', containerBottom);
+    assert.equal(shouldAutoScrollToBottom('ch-at-bottom'), true, 'Near-bottom channel (<35px) should auto-scroll');
+
+    // Verify restoreChatScrollPosition restores saved scrollTop and cleanup cancels pending rAF + timeout
+    const restoreTarget = { scrollTop: 0, scrollHeight: 1200, clientHeight: 400 } as unknown as HTMLElement;
+    const cancelSaved = restoreChatScrollPosition('ch-scrolled-up', restoreTarget);
+    assert.equal(restoreTarget.scrollTop, 120, 'Initial restore must apply saved scrollTop');
+    restoreTarget.scrollTop = 999;
+    cancelSaved();
+    assert.equal(cancelledRafIds.length, 1, 'Cleanup must cancel pending requestAnimationFrame');
+
+    // Even if a rAF callback somehow ran after cleanup, cancelled flag must prevent mutation
+    for (const cb of rafQueue.values()) cb(0);
+    assert.equal(restoreTarget.scrollTop, 999, 'Cancelled restore must not mutate scrollTop');
+
+    // Verify 80ms timeout for at-bottom channel is also cancelled by cleanup
+    const bottomTarget = { scrollTop: 0, scrollHeight: 1500, clientHeight: 400 } as unknown as HTMLElement;
+    const cancelBottom = restoreChatScrollPosition('ch-at-bottom', bottomTarget);
+    assert.equal(bottomTarget.scrollTop, 1500, 'At-bottom channel must scroll to scrollHeight');
+    bottomTarget.scrollHeight = 2000;
+    bottomTarget.scrollTop = 0;
+    cancelBottom();
+    await new Promise((r) => setTimeout(r, 110));
+    assert.equal(bottomTarget.scrollTop, 0, 'Cancelled 80ms timer must not re-clamp scrollTop');
+  } finally {
+    (globalThis as any).requestAnimationFrame = origRaf;
+    (globalThis as any).cancelAnimationFrame = origCancelRaf;
+  }
+
+  console.log('PASS: All audit fix unit tests (#3, #12, #13, #38, chatScrollMemory) passed.');
   process.exit(0);
 }
 
