@@ -28,6 +28,9 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    watch: {
+      ignored: ['**/target/**', '**/src-tauri/**', '**/native/**', '**/android/**', '**/dist/**'],
+    },
     proxy: {
       '/api': {
         target: 'https://zerovc.safiroko.xyz',
