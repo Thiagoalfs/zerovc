@@ -34,7 +34,7 @@ use tray::TrayState;
 use url::Url;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct DesktopSettings {
     pub minimize_to_tray: bool,
     pub hardware_acceleration: bool,
@@ -73,16 +73,35 @@ fn settings_file_path(app: &AppHandle) -> Option<PathBuf> {
         .map(|dir| dir.join("settings.json"))
 }
 
-pub fn load_settings(app: &AppHandle) -> DesktopSettings {
-    let Some(path) = settings_file_path(app) else {
-        return DesktopSettings::default();
-    };
+fn load_settings_from_path(path: &std::path::Path) -> DesktopSettings {
     if let Ok(raw) = std::fs::read_to_string(path) {
         if let Ok(parsed) = serde_json::from_str::<DesktopSettings>(&raw) {
             return parsed;
         }
     }
     DesktopSettings::default()
+}
+
+#[cfg(target_os = "linux")]
+fn linux_preinit_settings_path() -> Option<PathBuf> {
+    // Matches Tauri's app_data_dir() on Linux ($XDG_DATA_HOME or $HOME/.local/share).
+    let base = std::env::var_os("XDG_DATA_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .filter(|v| !v.is_empty())
+                .map(|h| PathBuf::from(h).join(".local").join("share"))
+        })?;
+    Some(base.join("xyz.safiroko.zerovc").join("settings.json"))
+}
+
+pub fn load_settings(app: &AppHandle) -> DesktopSettings {
+    let Some(path) = settings_file_path(app) else {
+        return DesktopSettings::default();
+    };
+    load_settings_from_path(&path)
 }
 
 pub fn save_settings(app: &AppHandle, settings: &DesktopSettings) {
@@ -138,6 +157,13 @@ fn handle_deep_link_url(app: &AppHandle, raw_url: &str) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    if let Some(settings_path) = linux_preinit_settings_path() {
+        if !load_settings_from_path(&settings_path).hardware_acceleration {
+            std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+        }
+    }
+
     let nav_guard = tauri::plugin::Builder::<tauri::Wry, ()>::new("nav-guard")
         .on_navigation(|webview, url| {
             if url.scheme() == "https"
@@ -230,6 +256,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
@@ -382,6 +409,7 @@ pub fn run() {
             commands::set_auto_start,
             commands::get_auto_start,
             commands::set_zoom_factor,
+            commands::send_native_notification,
             commands::get_gpu_info,
             commands::set_hardware_acceleration,
             commands::get_hardware_acceleration,
@@ -434,4 +462,27 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_settings_from_path_parses_hardware_acceleration_and_defaults() {
+        let dir =
+            std::env::temp_dir().join(format!("zerovc-settings-test-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("settings.json");
+
+        std::fs::write(&path, r#"{"hardwareAcceleration":false}"#).unwrap();
+        let parsed = load_settings_from_path(&path);
+        assert!(!parsed.hardware_acceleration);
+        assert!(parsed.minimize_to_tray);
+
+        std::fs::write(&path, "invalid json").unwrap();
+        assert!(load_settings_from_path(&path).hardware_acceleration);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

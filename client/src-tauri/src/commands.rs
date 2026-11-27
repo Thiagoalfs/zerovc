@@ -17,7 +17,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
-use tauri_plugin_global_shortcut::GlobalShortcutExt;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+use tauri_plugin_notification::NotificationExt;
 use url::Url;
 
 pub const REMOTE_SERVER_URL: &str = "https://zerovc.safiroko.xyz";
@@ -122,14 +123,17 @@ pub fn window_minimize(app: AppHandle) {
 }
 
 #[tauri::command]
-pub fn window_maximize(app: AppHandle) {
-    if let Some(win) = app.get_webview_window("main") {
-        if win.is_maximized().unwrap_or(false) {
-            let _ = win.unmaximize();
-        } else {
-            let _ = win.maximize();
-        }
+pub fn window_maximize(app: AppHandle) -> Result<bool, String> {
+    let win = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Main window not found".to_string())?;
+    let was_maximized = win.is_maximized().map_err(|e| e.to_string())?;
+    if was_maximized {
+        win.unmaximize().map_err(|e| e.to_string())?;
+    } else {
+        win.maximize().map_err(|e| e.to_string())?;
     }
+    Ok(win.is_maximized().unwrap_or(!was_maximized))
 }
 
 #[tauri::command]
@@ -178,19 +182,15 @@ pub fn is_cursor_in_window(app: AppHandle) -> bool {
     if !win.is_visible().unwrap_or(false) {
         return false;
     }
-    let Ok(cursor) = win.cursor_position() else {
-        return true;
-    };
-    let Ok(pos) = win.outer_position() else {
-        return true;
-    };
-    let Ok(size) = win.outer_size() else {
-        return true;
-    };
-    cursor.x >= pos.x as f64
-        && cursor.x <= (pos.x as f64 + size.width as f64)
-        && cursor.y >= pos.y as f64
-        && cursor.y <= (pos.y as f64 + size.height as f64)
+    match (win.cursor_position(), win.outer_position(), win.outer_size()) {
+        (Ok(cursor), Ok(pos), Ok(size)) => {
+            cursor.x >= pos.x as f64
+                && cursor.x <= (pos.x as f64 + size.width as f64)
+                && cursor.y >= pos.y as f64
+                && cursor.y <= (pos.y as f64 + size.height as f64)
+        }
+        _ => win.is_focused().unwrap_or(false),
+    }
 }
 
 #[tauri::command]
@@ -282,15 +282,16 @@ pub async fn register_global_shortcut(
     shortcut: String,
     action: String,
 ) -> Result<bool, String> {
-    if shortcut.trim().is_empty() {
+    let Ok(parsed) = shortcut.trim().parse::<Shortcut>() else {
         return Ok(false);
-    }
+    };
     let gs = app.global_shortcut();
-    let _ = gs.unregister(shortcut.as_str());
-    match gs.register(shortcut.as_str()) {
+    let _ = gs.unregister(parsed);
+    match gs.register(parsed) {
         Ok(()) => {
             let mut map = state.registered_shortcuts.lock().await;
-            map.insert(shortcut, action);
+            // Store canonical Shortcut::to_string() so the event handler in lib.rs matches.
+            map.insert(parsed.to_string(), action);
             Ok(true)
         }
         Err(_) => Ok(false),
@@ -401,10 +402,35 @@ pub fn get_auto_start(app: AppHandle) -> bool {
 
 #[tauri::command]
 pub fn set_zoom_factor(app: AppHandle, factor: f64) -> Result<(), String> {
+    if !factor.is_finite() || factor <= 0.0 {
+        return Err("Invalid zoom factor".to_string());
+    }
     if let Some(win) = app.get_webview_window("main") {
         win.set_zoom(factor).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn send_native_notification(
+    app: AppHandle,
+    title: String,
+    body: String,
+    tag: Option<String>,
+    icon: Option<String>,
+) -> Result<(), String> {
+    let mut builder = app.notification().builder().title(title).body(body);
+    if let Some(group) = tag.filter(|t| !t.trim().is_empty()) {
+        builder = builder.group(group);
+    }
+    // Desktop notification daemons expect a local path or theme icon name, not an HTTP URL.
+    if let Some(ic) = icon.filter(|i| {
+        let t = i.trim();
+        !t.is_empty() && !t.starts_with("http://") && !t.starts_with("https://") && !t.starts_with("data:")
+    }) {
+        builder = builder.icon(ic);
+    }
+    builder.show().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -736,5 +762,44 @@ mod tests {
             extract_valid_deep_link_path("https://evil.com/invite/XYZ"),
             None
         );
+    }
+
+    #[test]
+    fn test_tauri_conf_csp_allows_wasm_workers_and_google_fonts() {
+        let cfg: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("valid tauri.conf.json");
+        let csp = cfg
+            .pointer("/app/security/csp")
+            .and_then(|v| v.as_str())
+            .expect("app.security.csp string");
+        assert!(csp.contains("script-src 'self' 'wasm-unsafe-eval'"));
+        assert!(csp.contains("worker-src 'self' blob:"));
+        assert!(csp.contains("https://fonts.googleapis.com"));
+        assert!(csp.contains("object-src 'none'"));
+    }
+
+    #[test]
+    fn test_default_capabilities_include_required_permissions() {
+        let caps: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json"))
+                .expect("valid default.json");
+        let perms: Vec<&str> = caps
+            .pointer("/permissions")
+            .and_then(|v| v.as_array())
+            .expect("permissions array")
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect();
+        for required in [
+            "core:window:allow-toggle-maximize",
+            "core:webview:allow-set-webview-zoom",
+            "global-shortcut:allow-register",
+            "global-shortcut:allow-unregister",
+            "global-shortcut:allow-unregister-all",
+            "global-shortcut:allow-is-registered",
+            "notification:default",
+        ] {
+            assert!(perms.contains(&required), "missing capability: {required}");
+        }
     }
 }

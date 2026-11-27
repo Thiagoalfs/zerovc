@@ -1,8 +1,13 @@
 import { formatAssetUrl } from './api';
+import { isTauri } from './platform';
 import { useAuthStore } from '../stores/authStore';
 import { useStreamerModeStore } from '../stores/streamerModeStore';
 
 export const requestNotificationPermission = async (): Promise<boolean> => {
+  if (isTauri()) {
+    return true;
+  }
+
   if (typeof window === 'undefined' || !('Notification' in window)) {
     return false;
   }
@@ -28,7 +33,8 @@ export interface NotificationPayload {
 }
 
 export const sendNativeNotification = ({ title, body, icon, tag, onClick }: NotificationPayload): void => {
-  if (typeof window === 'undefined' || !('Notification' in window)) {
+  const tauri = isTauri();
+  if (typeof window === 'undefined' || (!tauri && !('Notification' in window))) {
     return;
   }
 
@@ -55,6 +61,23 @@ export const sendNativeNotification = ({ title, body, icon, tag, onClick }: Noti
       return;
     }
   } catch {}
+
+  if (tauri) {
+    // shortcut: tauri-plugin-notification v2 on desktop has no onClick callback; add if plugin adds action handlers on desktop.
+    void import('@tauri-apps/api/core')
+      .then(({ invoke }) =>
+        invoke('send_native_notification', {
+          title,
+          body,
+          tag: tag || 'zerovc-notification',
+          icon: icon && !icon.startsWith('http') && !icon.startsWith('data:') ? icon : null,
+        })
+      )
+      .catch((err) => {
+        console.warn('[Notification] Failed to display native notification:', err);
+      });
+    return;
+  }
 
   if (Notification.permission !== 'granted') {
     return;

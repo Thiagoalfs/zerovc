@@ -72,8 +72,18 @@ export const TitleBar: React.FC = () => {
 
     const desktopAPI = getDesktopAPI();
 
-    // Check initial maximized state
-    desktopAPI?.isMaximized?.().then((max) => setIsMaximized(max)).catch(() => {});
+    // Check initial maximized state and sync on OS resize/snap/Win+Up
+    const syncMaximized = () => {
+      desktopAPI?.isMaximized?.().then((max) => setIsMaximized(!!max)).catch(() => {});
+    };
+    syncMaximized();
+
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleResize = () => {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(syncMaximized, 80);
+    };
+    window.addEventListener('resize', handleResize);
 
     // Live Server Sync check + initial binary update check
     checkServerVersion();
@@ -142,6 +152,8 @@ export const TitleBar: React.FC = () => {
     return () => {
       clearInterval(interval);
       clearInterval(binaryInterval);
+      if (resizeTimer) clearTimeout(resizeTimer);
+      window.removeEventListener('resize', handleResize);
       if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
       unsubAvailable?.();
       unsubProgress?.();
@@ -225,8 +237,8 @@ export const TitleBar: React.FC = () => {
 
   const handleMaximize = async () => {
     const desktopAPI = getDesktopAPI();
-    desktopAPI?.maximize();
-    const max = await desktopAPI?.isMaximized();
+    await desktopAPI?.maximize?.();
+    const max = await desktopAPI?.isMaximized?.();
     setIsMaximized(!!max);
   };
 

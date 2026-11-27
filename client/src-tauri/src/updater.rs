@@ -367,39 +367,68 @@ pub async fn check_for_updates(app: AppHandle) {
 
 #[tauri::command]
 pub async fn start_download_update(app: AppHandle) {
-    if let Ok(updater) = app.updater() {
-        if let Ok(Some(update)) = updater.check().await {
-            let app_clone = app.clone();
-            let mut downloaded: usize = 0;
-            let res = update
-                .download_and_install(
-                    move |chunk_len, content_len| {
-                        downloaded += chunk_len;
-                        let total = content_len.unwrap_or(0);
-                        let percent = if total > 0 {
-                            (downloaded as f64 / total as f64) * 100.0
-                        } else {
-                            0.0
-                        };
-                        let _ = app_clone.emit(
-                            "update-progress",
+    match app.updater() {
+        Ok(updater) => match updater.check().await {
+            Ok(Some(update)) => {
+                let app_clone = app.clone();
+                let mut downloaded: usize = 0;
+                match update
+                    .download_and_install(
+                        move |chunk_len, content_len| {
+                            downloaded += chunk_len;
+                            let total = content_len.unwrap_or(0);
+                            let percent = if total > 0 {
+                                ((downloaded as f64 / total as f64) * 100.0).min(100.0)
+                            } else {
+                                0.0
+                            };
+                            let _ = app_clone.emit(
+                                "update-progress",
+                                serde_json::json!({
+                                    "percent": percent,
+                                    "bytesPerSecond": 0,
+                                    "transferred": downloaded,
+                                    "total": total,
+                                }),
+                            );
+                        },
+                        || {},
+                    )
+                    .await
+                {
+                    Ok(()) => {
+                        let _ = app.emit(
+                            "update-downloaded",
                             serde_json::json!({
-                                "percent": percent,
-                                "bytesPerSecond": 0,
-                                "transferred": downloaded,
-                                "total": total,
+                                "version": update.version,
+                                "releaseNotes": update.body,
                             }),
                         );
-                    },
-                    || {},
-                )
-                .await;
-            if res.is_ok() {
+                    }
+                    Err(err) => {
+                        eprintln!("[Updater] start_download_update failed: {err}");
+                        let _ = app.emit(
+                            "update-check-result",
+                            serde_json::json!({ "status": "error", "message": err.to_string() }),
+                        );
+                    }
+                }
+            }
+            Ok(None) => {}
+            Err(err) => {
+                eprintln!("[Updater] start_download_update check failed: {err}");
                 let _ = app.emit(
-                    "update-downloaded",
-                    serde_json::json!({ "version": update.version }),
+                    "update-check-result",
+                    serde_json::json!({ "status": "error", "message": err.to_string() }),
                 );
             }
+        },
+        Err(err) => {
+            eprintln!("[Updater] updater unavailable: {err}");
+            let _ = app.emit(
+                "update-check-result",
+                serde_json::json!({ "status": "error", "message": err.to_string() }),
+            );
         }
     }
 }

@@ -27,7 +27,7 @@ export interface ElectronAPI {
   getScreenSources: (opts?: { thumbnail?: boolean; fetchWindowIcons?: boolean }) => Promise<ScreenSource[]>;
   isProcessRunning?: (processes: string[]) => Promise<boolean>;
   minimize: () => void;
-  maximize: () => void;
+  maximize: () => void | Promise<void>;
   close: () => void;
   isMaximized: () => Promise<boolean>;
   checkForUpdates: () => void;

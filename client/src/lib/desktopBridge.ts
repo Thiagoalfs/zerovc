@@ -22,11 +22,6 @@ async function tauriInvoke<T = unknown>(cmd: string, args?: Record<string, unkno
   return invoke<T>(cmd, args);
 }
 
-async function tauriCurrentWindow() {
-  const { getCurrentWindow } = await import('@tauri-apps/api/window');
-  return getCurrentWindow();
-}
-
 function createTauriEventListener<T = any>(
   eventName: string,
   callback: (payload: T) => void
@@ -56,7 +51,6 @@ function createTauriEventListener<T = any>(
 }
 
 let cachedTauriBridge: ElectronAPI | null = null;
-const globalShortcutCallbacks = new Set<(action: string) => void>();
 
 function createTauriBridge(): ElectronAPI {
   if (cachedTauriBridge) return cachedTauriBridge;
@@ -105,109 +99,47 @@ function createTauriBridge(): ElectronAPI {
     },
 
     minimize: () => {
-      void tauriCurrentWindow()
-        .then((win) => win.minimize())
-        .catch(() => {});
+      void tauriInvoke('window_minimize').catch(() => {});
     },
 
     maximize: () => {
-      void tauriCurrentWindow()
-        .then((win) => win.toggleMaximize())
-        .catch(() => {});
+      return tauriInvoke<void>('window_maximize').catch(() => {});
     },
 
     close: () => {
-      void tauriCurrentWindow()
-        .then((win) => win.close())
-        .catch(() => {});
+      void tauriInvoke('window_close').catch(() => {});
     },
 
     isMaximized: async () => {
       try {
-        const win = await tauriCurrentWindow();
-        return await win.isMaximized();
+        return await tauriInvoke<boolean>('window_is_maximized');
       } catch {
         return false;
       }
     },
 
     setFullScreen: (flag: boolean) => {
-      void tauriCurrentWindow()
-        .then((win) => win.setFullscreen(flag))
-        .catch(() => {});
+      void tauriInvoke('window_set_fullscreen', { flag }).catch(() => {});
     },
 
     isFullScreen: async () => {
       try {
-        const win = await tauriCurrentWindow();
-        return await win.isFullscreen();
+        return await tauriInvoke<boolean>('window_is_fullscreen');
       } catch {
         return false;
       }
     },
 
     checkForUpdates: () => {
-      void import('@tauri-apps/plugin-updater')
-        .then(({ check }) => check())
-        .then(async (update) => {
-          const { emit } = await import('@tauri-apps/api/event');
-          if (update) {
-            await emit('update-available', {
-              version: update.version,
-              releaseNotes: update.body ?? undefined,
-            } satisfies UpdateInfo);
-            await emit('update-check-result', {
-              status: 'available',
-              version: update.version,
-            });
-          } else {
-            await emit('update-check-result', {
-              status: 'up-to-date',
-            });
-          }
-        })
-        .catch(async (err) => {
-          console.warn('[Updater] checkForUpdates failed:', err);
-          try {
-            const { emit } = await import('@tauri-apps/api/event');
-            await emit('update-check-result', { status: 'error' });
-          } catch {}
-        });
+      void tauriInvoke('check_for_updates').catch(() => {});
     },
 
     startDownloadUpdate: () => {
-      void import('@tauri-apps/plugin-updater')
-        .then(({ check }) => check())
-        .then(async (update) => {
-          if (!update) return;
-          const { emit } = await import('@tauri-apps/api/event');
-          let downloaded = 0;
-          let total = 0;
-          await update.downloadAndInstall((event) => {
-            if (event.event === 'Started') {
-              total = event.data.contentLength ?? 0;
-            } else if (event.event === 'Progress') {
-              downloaded += event.data.chunkLength;
-              const percent = total > 0 ? Math.min(100, Math.round((downloaded / total) * 100)) : 0;
-              void emit('update-progress', {
-                percent,
-                bytesPerSecond: 0,
-                transferred: downloaded,
-                total,
-              } satisfies UpdateProgress);
-            } else if (event.event === 'Finished') {
-              void emit('update-downloaded', {
-                version: update.version,
-                releaseNotes: update.body ?? undefined,
-              } satisfies UpdateInfo);
-            }
-          });
-        })
-        .catch(() => {});
+      void tauriInvoke('start_download_update').catch(() => {});
     },
 
     quitAndInstall: () => {
-      void tauriInvoke('relaunch_app').catch(() => {});
+      void tauriInvoke('quit_and_install').catch(() => {});
     },
 
     restartToUpdate: () => {
@@ -246,17 +178,7 @@ function createTauriBridge(): ElectronAPI {
 
     registerGlobalShortcut: async (shortcut: string, action: string) => {
       try {
-        const { register } = await import('@tauri-apps/plugin-global-shortcut');
-        await register(shortcut, (event) => {
-          if (event.state === 'Pressed') {
-            globalShortcutCallbacks.forEach((cb) => {
-              try {
-                cb(action);
-              } catch {}
-            });
-          }
-        });
-        return true;
+        return await tauriInvoke<boolean>('register_global_shortcut', { shortcut, action });
       } catch {
         return false;
       }
@@ -264,22 +186,14 @@ function createTauriBridge(): ElectronAPI {
 
     unregisterAllShortcuts: async () => {
       try {
-        const { unregisterAll } = await import('@tauri-apps/plugin-global-shortcut');
-        await unregisterAll();
-        return true;
+        return await tauriInvoke<boolean>('unregister_all_shortcuts');
       } catch {
         return false;
       }
     },
 
-    onGlobalShortcut: (callback) => {
-      globalShortcutCallbacks.add(callback);
-      const unlistenEvent = createTauriEventListener<string>('global-shortcut-triggered', callback);
-      return () => {
-        globalShortcutCallbacks.delete(callback);
-        unlistenEvent();
-      };
-    },
+    onGlobalShortcut: (callback) =>
+      createTauriEventListener<string>('global-shortcut-triggered', callback),
 
     onUpdateAvailable: (callback) => createTauriEventListener<UpdateInfo>('update-available', callback),
     onTrayCheckUpdates: (callback) => createTauriEventListener<void>('tray-check-updates', () => callback()),
@@ -375,12 +289,7 @@ function createTauriBridge(): ElectronAPI {
 
     setZoomFactor: (factor: number) => {
       currentZoomFactor = factor;
-      void tauriCurrentWindow()
-        .then((win) => (win as any).setZoom?.(factor))
-        .catch(() => {});
-      if (typeof document !== 'undefined') {
-        document.documentElement.style.zoom = factor === 1 ? '' : `${Math.round(factor * 100)}%`;
-      }
+      void tauriInvoke('set_zoom_factor', { factor }).catch(() => {});
     },
 
     getZoomFactor: () => currentZoomFactor,
@@ -467,5 +376,4 @@ export const desktopBridge = {
 
 export function resetDesktopBridgeCacheForTests(): void {
   cachedTauriBridge = null;
-  globalShortcutCallbacks.clear();
 }
